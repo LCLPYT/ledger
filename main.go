@@ -1,22 +1,22 @@
 package main
 
 import (
-	"net/http"
+	"ledger/db"
+	"ledger/routes"
 	"os"
 
 	"github.com/gin-gonic/gin"
 )
 
-func status(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
-		"status": "ok",
-	})
-}
-
 func main() {
+	dsn := os.Getenv("DATABASE_URL")
+	database := db.InitDB(dsn)
+	defer database.Close()
+
+	enforcer := db.InitCasbin(dsn)
 	r := gin.Default()
 
-	r.GET("/status", status)
+	routes.SetupRoutes(r, enforcer, database)
 
 	err := r.Run()
 
