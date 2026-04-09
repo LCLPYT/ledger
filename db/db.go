@@ -51,6 +51,10 @@ func InitCasbin(dsn string) *casbin.Enforcer {
 		panic(err)
 	}
 
-	enforcer.LoadPolicy()
+	err = enforcer.LoadPolicy()
+	if err != nil {
+		panic(err)
+	}
+
 	return enforcer
 }

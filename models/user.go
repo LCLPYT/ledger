@@ -16,7 +16,7 @@ type LoginRequest struct {
 }
 
 type TokenRequest struct {
-	Name        string    `json:"name"`
-	Permissions []string  `json:"permissions"`
-	Expiry      time.Time `json:"expiry"`
+	Name   string    `json:"name"`
+	Scopes []string  `json:"scopes"`
+	Expiry time.Time `json:"expiry"`
 }
