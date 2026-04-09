@@ -7,10 +7,11 @@ import (
 	"strings"
 	"testing"
 
+	"ledger/handlers"
+
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"ledger/handlers"
 )
 
 func loginRouter() *gin.Engine {
@@ -33,25 +34,24 @@ func TestLogin_Success(t *testing.T) {
 	userID := mustCreateUser(t, "alice", "alice@example.com", "secret123")
 	mustAddPolicy(t, userID, "user", "read")
 
-	w := postLogin(loginRouter(), `{"identifier":"alice","password":"secret123"}`)
+	tests := []struct {
+		name       string
+		identifier string
+	}{
+		{"Username", "alice"},
+		{"Email", "alice@example.com"},
+	}
 
-	require.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]string
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
-	assert.NotEmpty(t, resp["token"])
-}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			w := postLogin(loginRouter(), `{"identifier":"`+test.identifier+`","password":"secret123"}`)
 
-func TestLogin_ByEmail(t *testing.T) {
-	cleanDB(t)
-	userID := mustCreateUser(t, "bob", "bob@example.com", "hunter2")
-	mustAddPolicy(t, userID, "user", "read")
-
-	w := postLogin(loginRouter(), `{"identifier":"bob@example.com","password":"hunter2"}`)
-
-	require.Equal(t, http.StatusOK, w.Code)
-	var resp map[string]string
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
-	assert.NotEmpty(t, resp["token"])
+			require.Equal(t, http.StatusOK, w.Code)
+			var resp map[string]string
+			require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+			assert.NotEmpty(t, resp["token"])
+		})
+	}
 }
 
 func TestLogin_WrongPassword(t *testing.T) {
