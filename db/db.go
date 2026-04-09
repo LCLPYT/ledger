@@ -40,13 +40,13 @@ func InitDB(dsn string) *sql.DB {
 	return db
 }
 
-func InitCasbin(dsn string) *casbin.Enforcer {
+func InitCasbin(dsn string, modelPath string) *casbin.Enforcer {
 	adapter, err := casbinpg.NewAdapter(dsn)
 	if err != nil {
 		panic(err)
 	}
 
-	enforcer, err := casbin.NewEnforcer("casbin_model.conf", adapter)
+	enforcer, err := casbin.NewEnforcer(modelPath, adapter)
 	if err != nil {
 		panic(err)
 	}

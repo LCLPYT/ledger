@@ -13,7 +13,7 @@ func main() {
 	database := db.InitDB(dsn)
 	defer database.Close()
 
-	enforcer := db.InitCasbin(dsn)
+	enforcer := db.InitCasbin(dsn, "casbin_model.conf")
 	r := gin.Default()
 
 	routes.SetupRoutes(r, enforcer, database)
