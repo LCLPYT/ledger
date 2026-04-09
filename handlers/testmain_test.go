@@ -5,7 +5,9 @@ import (
 	"os"
 	"strconv"
 	"testing"
+	"time"
 
+	"ledger/auth"
 	appdb "ledger/db"
 
 	"github.com/casbin/casbin/v2"
@@ -58,4 +60,13 @@ func mustAddPolicy(t *testing.T, userID int64, obj, act string) {
 	if _, err := testEnforcer.AddPolicy(strconv.FormatInt(userID, 10), obj, act); err != nil {
 		t.Fatalf("mustAddPolicy: %v", err)
 	}
+}
+
+func mustCreateToken(t *testing.T, userID int64, scopes []string) string {
+	t.Helper()
+	token, err := auth.GenerateToken(strconv.FormatInt(userID, 10), scopes, time.Now().Add(time.Hour), testDB, "test")
+	if err != nil {
+		t.Fatalf("mustCreateToken: %v", err)
+	}
+	return token
 }

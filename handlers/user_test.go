@@ -2,10 +2,12 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"ledger/middleware"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"ledger/handlers"
 
@@ -19,6 +21,39 @@ func loginRouter() *gin.Engine {
 	r := gin.New()
 	r.POST("/api/v1/user/login", handlers.Login(testDB, testEnforcer))
 	return r
+}
+
+func createTokenRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.POST("/api/v1/user/token",
+		middleware.AuthRequired(testEnforcer, testDB, "user.create_token"),
+		handlers.CreateToken(testDB, testEnforcer))
+	return r
+}
+
+func getUserRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.GET("/api/v1/user",
+		middleware.AuthRequired(testEnforcer, testDB, "user.read"),
+		handlers.GetUser(testDB))
+	return r
+}
+
+func authedRequest(method, path, bearer, body string) *http.Request {
+	var bodyReader *strings.Reader
+	if body != "" {
+		bodyReader = strings.NewReader(body)
+	} else {
+		bodyReader = strings.NewReader("")
+	}
+	req := httptest.NewRequest(method, path, bodyReader)
+	req.Header.Set("Content-Type", "application/json")
+	if bearer != "" {
+		req.Header.Set("Authorization", "Bearer "+bearer)
+	}
+	return req
 }
 
 func postLogin(r *gin.Engine, body string) *httptest.ResponseRecorder {
@@ -94,4 +129,149 @@ func TestLogin_TokenStoredInDB(t *testing.T) {
 	).Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count)
+}
+
+func TestCreateToken_Success(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
+	mustAddPolicy(t, userID, "user", "read")
+	mustAddPolicy(t, userID, "user", "create_token")
+	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
+
+	body := `{"name":"ci","scopes":["user.read"],"expiry":"` + time.Now().Add(24*time.Hour).Format(time.RFC3339) + `"}`
+	w := httptest.NewRecorder()
+	createTokenRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/token", token, body))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.NotEmpty(t, resp["token"])
+}
+
+func TestCreateToken_Unauthenticated(t *testing.T) {
+	cleanDB(t)
+
+	body := `{"name":"x","scopes":["user.read"],"expiry":"` + time.Now().Add(time.Hour).Format(time.RFC3339) + `"}`
+	w := httptest.NewRecorder()
+	createTokenRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/token", "", body))
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestCreateToken_ForbiddenScope(t *testing.T) {
+	cleanDB(t)
+	// User has "user.read" and "user.create_token" but not "admin.delete"
+	userID := mustCreateUser(t, "bob", "bob@example.com", "x")
+	mustAddPolicy(t, userID, "user", "read")
+	mustAddPolicy(t, userID, "user", "create_token")
+	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
+
+	body := `{"name":"evil","scopes":["admin.delete"],"expiry":"` + time.Now().Add(time.Hour).Format(time.RFC3339) + `"}`
+	w := httptest.NewRecorder()
+	createTokenRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/token", token, body))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestCreateToken_ExpiryTooFar(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "carol", "carol@example.com", "x")
+	mustAddPolicy(t, userID, "user", "read")
+	mustAddPolicy(t, userID, "user", "create_token")
+	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
+
+	body := `{"name":"x","scopes":["user.read"],"expiry":"` + time.Now().AddDate(2, 0, 0).Format(time.RFC3339) + `"}`
+	w := httptest.NewRecorder()
+	createTokenRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/token", token, body))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestCreateToken_InvalidScopeFormat(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "dave", "dave@example.com", "x")
+	mustAddPolicy(t, userID, "user", "read")
+	mustAddPolicy(t, userID, "user", "create_token")
+	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
+
+	body := `{"name":"x","scopes":["notavalidscope"],"expiry":"` + time.Now().Add(time.Hour).Format(time.RFC3339) + `"}`
+	w := httptest.NewRecorder()
+	createTokenRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/token", token, body))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestCreateToken_StoredInDB(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "eve", "eve@example.com", "x")
+	mustAddPolicy(t, userID, "user", "read")
+	mustAddPolicy(t, userID, "user", "create_token")
+	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
+
+	body := `{"name":"mytoken","scopes":["user.read"],"expiry":"` + time.Now().Add(24*time.Hour).Format(time.RFC3339) + `"}`
+	w := httptest.NewRecorder()
+	createTokenRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/token", token, body))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	var count int
+	err := testDB.QueryRow(
+		"SELECT COUNT(*) FROM access_tokens WHERE user_id = $1 AND name = 'mytoken' AND revoked = false",
+		userID,
+	).Scan(&count)
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+}
+
+func TestGetUser_Success(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "frank", "frank@example.com", "x")
+	mustAddPolicy(t, userID, "user", "read")
+	token := mustCreateToken(t, userID, []string{"user.read"})
+
+	w := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/user", token, ""))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.Equal(t, "frank", resp["username"])
+	assert.Equal(t, "frank@example.com", resp["email"])
+}
+
+func TestGetUser_Unauthenticated(t *testing.T) {
+	cleanDB(t)
+
+	w := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/user", "", ""))
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestGetUser_RevokedToken(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "grace", "grace@example.com", "x")
+	mustAddPolicy(t, userID, "user", "read")
+	token := mustCreateToken(t, userID, []string{"user.read"})
+
+	_, err := testDB.Exec("UPDATE access_tokens SET revoked = true WHERE user_id = $1", userID)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/user", token, ""))
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestGetUser_InsufficientScope(t *testing.T) {
+	cleanDB(t)
+	// Token only has "user.create_token" scope, not "user.read"
+	userID := mustCreateUser(t, "henry", "henry@example.com", "x")
+	mustAddPolicy(t, userID, "user", "read")
+	mustAddPolicy(t, userID, "user", "create_token")
+	token := mustCreateToken(t, userID, []string{"user.create_token"})
+
+	w := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/user", token, ""))
+
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }
