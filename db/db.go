@@ -2,16 +2,24 @@ package db
 
 import (
 	"database/sql"
+	"embed"
 	"errors"
 	"log"
 
 	casbinpg "github.com/casbin/casbin-pg-adapter"
 	"github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v2/model"
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
-	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/lib/pq"
 )
+
+//go:embed migrations/*.sql
+var migrationsFS embed.FS
+
+//go:embed casbin_model.conf
+var casbinModel string
 
 func InitDB(dsn string) *sql.DB {
 	if dsn == "" {
@@ -28,7 +36,12 @@ func InitDB(dsn string) *sql.DB {
 		panic(err)
 	}
 
-	m, err := migrate.NewWithDatabaseInstance("file://migrations", "postgres", driver)
+	source, err := iofs.New(migrationsFS, "migrations")
+	if err != nil {
+		panic(err)
+	}
+
+	m, err := migrate.NewWithInstance("iofs", source, "postgres", driver)
 	if err != nil {
 		panic(err)
 	}
@@ -40,19 +53,23 @@ func InitDB(dsn string) *sql.DB {
 	return db
 }
 
-func InitCasbin(dsn string, modelPath string) *casbin.Enforcer {
+func InitCasbin(dsn string) *casbin.Enforcer {
+	m, err := model.NewModelFromString(casbinModel)
+	if err != nil {
+		panic(err)
+	}
+
 	adapter, err := casbinpg.NewAdapter(dsn)
 	if err != nil {
 		panic(err)
 	}
 
-	enforcer, err := casbin.NewEnforcer(modelPath, adapter)
+	enforcer, err := casbin.NewEnforcer(m, adapter)
 	if err != nil {
 		panic(err)
 	}
 
-	err = enforcer.LoadPolicy()
-	if err != nil {
+	if err := enforcer.LoadPolicy(); err != nil {
 		panic(err)
 	}
 

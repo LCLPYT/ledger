@@ -20,7 +20,7 @@ var (
 func TestMain(m *testing.M) {
 	dsn := os.Getenv("DATABASE_URL")
 	testDB = appdb.InitDB(dsn)
-	testEnforcer = appdb.InitCasbin(dsn, "../casbin_model.conf")
+	testEnforcer = appdb.InitCasbin(dsn)
 
 	code := m.Run()
 	testDB.Close()
