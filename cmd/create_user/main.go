@@ -7,6 +7,7 @@ import (
 	"ledger/util"
 	"log"
 	"os"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -18,6 +19,8 @@ func main() {
 	dsn := os.Getenv("DATABASE_URL")
 	database := db.InitDB(dsn)
 	defer database.Close()
+
+	enforcer := db.InitCasbin(dsn)
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -49,6 +52,10 @@ func main() {
 
 	if err != nil {
 		log.Fatal(err)
+	}
+
+	if _, err := enforcer.AddGroupingPolicy(strconv.FormatInt(id, 10), "default"); err != nil {
+		log.Fatalf("Failed to assign default role: %v", err)
 	}
 
 	fmt.Printf("User created successfully with ID: %d\n", id)

@@ -18,6 +18,9 @@ psql: db
 create_user: db
     JWT_SECRET=dev DATABASE_URL="{{DB_DSN}}" go run cmd/create_user/main.go
 
+init_roles: db
+    JWT_SECRET=dev DATABASE_URL="{{DB_DSN}}" go run cmd/init_roles/main.go
+
 test:
     docker compose down postgres_test
     docker volume rm ledger_pgdata_test || true

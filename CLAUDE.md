@@ -13,7 +13,8 @@ just stop_db        # Stop postgres
 just delete_db      # Stop postgres and delete the volume
 just psql           # Open a psql shell in the container
 just create_user    # Interactive CLI to create a user in the DB
-just build_production  # Build optimized binary
+just build          # Build optimized binary
+just test           # run tests
 ```
 
 Run the server manually:

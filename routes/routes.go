@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"ledger/handlers"
 	"ledger/middleware"
+	"ledger/permissions"
 	"net/http"
 
 	"github.com/casbin/casbin/v2"
@@ -27,6 +28,12 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 
 	user := v1.Group("/user")
 	user.POST("/login", handlers.Login(db, enforcer))
-	user.POST("/token", middleware.AuthRequired(enforcer, db, "user.create_token"), handlers.CreateToken(db, enforcer))
-	user.GET("", middleware.AuthRequired(enforcer, db, "user.read"), handlers.GetUser(db))
+	user.POST("/token", middleware.AuthRequired(enforcer, db, permissions.UserCreateToken), handlers.CreateToken(db, enforcer))
+	user.GET("", middleware.AuthRequired(enforcer, db, permissions.UserRead), handlers.GetUser(db))
+
+	roles := v1.Group("/roles")
+	roles.POST("", middleware.AuthRequired(enforcer, db, permissions.RolesCreate), handlers.CreateRole(db))
+	roles.GET("/permissions", middleware.AuthRequired(enforcer, db, permissions.RolesRead), handlers.ListPermissions())
+	roles.POST("/:role/users", middleware.AuthRequired(enforcer, db, permissions.RolesManageUsers), handlers.AddUserToRole(db, enforcer))
+	roles.DELETE("/:role/users", middleware.AuthRequired(enforcer, db, permissions.RolesManageUsers), handlers.RemoveUserFromRole(db, enforcer))
 }

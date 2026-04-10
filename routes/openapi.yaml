@@ -70,6 +70,116 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/roles:
+    post:
+      summary: Create a new role
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateRoleRequest"
+      responses:
+        "201":
+          description: Role created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Role"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/roles/permissions:
+    get:
+      summary: List all permissions defined in the system
+      responses:
+        "200":
+          description: List of permission strings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+                    example: ["user.read", "user.create_token", "roles.create", "roles.read", "roles.manage_users"]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/roles/{role}/users:
+    post:
+      summary: Add a user to a role
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+          example: default
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleUserRequest"
+      responses:
+        "200":
+          description: User added to role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      summary: Remove a user from a role
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+          example: default
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RoleUserRequest"
+      responses:
+        "200":
+          description: User removed from role
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/user:
     get:
       summary: Get the authenticated user's profile
@@ -151,6 +261,43 @@ components:
           type: string
           format: date-time
 
+    CreateRoleRequest:
+      type: object
+      required: [name]
+      properties:
+        name:
+          type: string
+          example: admin
+
+    Role:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        name:
+          type: string
+          example: admin
+        created_at:
+          type: string
+          format: date-time
+
+    RoleUserRequest:
+      type: object
+      required: [user_id]
+      properties:
+        user_id:
+          type: string
+          example: "42"
+
+    Message:
+      type: object
+      properties:
+        message:
+          type: string
+          example: user added to role
+
     Error:
       type: object
       properties:
@@ -179,6 +326,12 @@ components:
             $ref: "#/components/schemas/Error"
     NotFound:
       description: Resource not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/Error"
+    Conflict:
+      description: Resource already exists
       content:
         application/json:
           schema:
