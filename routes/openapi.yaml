@@ -95,7 +95,7 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
-  /api/v1/roles/permissions:
+  /api/v1/permissions:
     get:
       summary: List all permissions defined in the system
       responses:

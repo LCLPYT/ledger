@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"errors"
 	"ledger/models"
-	"ledger/permissions"
 	"net/http"
 
 	"github.com/casbin/casbin/v2"
@@ -36,12 +35,6 @@ func CreateRole(db *sql.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusCreated, role)
-	}
-}
-
-func ListPermissions() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		c.JSON(http.StatusOK, gin.H{"permissions": permissions.All})
 	}
 }
 

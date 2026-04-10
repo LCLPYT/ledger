@@ -6,6 +6,7 @@ const (
 	RolesCreate      = "roles.create"
 	RolesRead        = "roles.read"
 	RolesManageUsers = "roles.manage_users"
+	PermissionsList  = "permissions.list"
 )
 
 var All = []string{
@@ -14,4 +15,5 @@ var All = []string{
 	RolesCreate,
 	RolesRead,
 	RolesManageUsers,
+	PermissionsList,
 }

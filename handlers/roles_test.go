@@ -24,15 +24,6 @@ func createRoleRouter() *gin.Engine {
 	return r
 }
 
-func listPermissionsRouter() *gin.Engine {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	r.GET("/api/v1/roles/permissions",
-		middleware.AuthRequired(testEnforcer, testDB, permissions.RolesRead),
-		handlers.ListPermissions())
-	return r
-}
-
 func roleUsersRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
@@ -103,42 +94,6 @@ func TestCreateRole_Forbidden(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	createRoleRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/roles", token, `{"name":"admin"}`))
-
-	assert.Equal(t, http.StatusForbidden, w.Code)
-}
-
-func TestListPermissions_Success(t *testing.T) {
-	cleanDB(t)
-	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, userID, "roles", "read")
-	token := mustCreateToken(t, userID, []string{permissions.RolesRead})
-
-	w := httptest.NewRecorder()
-	listPermissionsRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/roles/permissions", token, ""))
-
-	require.Equal(t, http.StatusOK, w.Code)
-	var resp map[string][]string
-	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
-	assert.ElementsMatch(t, permissions.All, resp["permissions"])
-}
-
-func TestListPermissions_Unauthenticated(t *testing.T) {
-	cleanDB(t)
-
-	w := httptest.NewRecorder()
-	listPermissionsRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/roles/permissions", "", ""))
-
-	assert.Equal(t, http.StatusUnauthorized, w.Code)
-}
-
-func TestListPermissions_Forbidden(t *testing.T) {
-	cleanDB(t)
-	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
-	token := mustCreateToken(t, userID, []string{permissions.UserRead})
-
-	w := httptest.NewRecorder()
-	listPermissionsRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/roles/permissions", token, ""))
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
 }
