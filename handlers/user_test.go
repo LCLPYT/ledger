@@ -263,6 +263,42 @@ func TestGetUser_RevokedToken(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
 
+func TestGetUser_ViaRole(t *testing.T) {
+	cleanDB(t)
+	mustCreateRole(t, "viewer")
+	mustAddRolePermission(t, "viewer", perms.UserRead)
+	userID := mustCreateUser(t, "frank", "frank@example.com", "x")
+	mustAssignUserToRole(t, userID, "viewer")
+	token := mustCreateToken(t, userID, []string{"user.read"})
+
+	w := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/user", token, ""))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.Equal(t, "frank", resp["username"])
+}
+
+func TestCreateToken_ViaRole(t *testing.T) {
+	cleanDB(t)
+	mustCreateRole(t, "tokenmaker")
+	mustAddRolePermission(t, "tokenmaker", perms.UserRead)
+	mustAddRolePermission(t, "tokenmaker", perms.UserCreateToken)
+	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
+	mustAssignUserToRole(t, userID, "tokenmaker")
+	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
+
+	body := `{"name":"ci","scopes":["user.read"],"expiry":"` + time.Now().Add(24*time.Hour).Format(time.RFC3339) + `"}`
+	w := httptest.NewRecorder()
+	createTokenRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/token", token, body))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.NotEmpty(t, resp["token"])
+}
+
 func TestGetUser_InsufficientScope(t *testing.T) {
 	cleanDB(t)
 	// Token only has "user.create_token" scope, not "user.read"

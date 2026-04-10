@@ -77,6 +77,21 @@ func mustAddPolicy(t *testing.T, userID int64, obj, act string) {
 	}
 }
 
+func mustAddRolePermission(t *testing.T, roleName, permission string) {
+	t.Helper()
+	parts := strings.Split(permission, ".")
+	if _, err := testEnforcer.AddPolicy(roleName, parts[0], parts[1]); err != nil {
+		t.Fatalf("mustAddRolePermission: %v", err)
+	}
+}
+
+func mustAssignUserToRole(t *testing.T, userID int64, roleName string) {
+	t.Helper()
+	if _, err := testEnforcer.AddGroupingPolicy(strconv.FormatInt(userID, 10), roleName); err != nil {
+		t.Fatalf("mustAssignUserToRole: %v", err)
+	}
+}
+
 func mustCreateToken(t *testing.T, userID int64, scopes []string) string {
 	t.Helper()
 	token, err := auth.GenerateToken(strconv.FormatInt(userID, 10), scopes, time.Now().Add(time.Hour), testDB, "test")
