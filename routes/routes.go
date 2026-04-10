@@ -2,6 +2,7 @@ package routes
 
 import (
 	"database/sql"
+	_ "embed"
 	"ledger/handlers"
 	"ledger/middleware"
 	"net/http"
@@ -10,7 +11,14 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
+//go:embed openapi.yaml
+var openapiSpec []byte
+
 func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
+	r.GET("/openapi.yaml", func(c *gin.Context) {
+		c.Data(http.StatusOK, "application/yaml; charset=utf-8", openapiSpec)
+	})
+
 	r.GET("/status", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"status": "ok"})
 	})

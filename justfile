@@ -10,7 +10,7 @@ delete_db: stop_db
     docker volume rm ledger_pgdata || true
 
 serve: db
-    DATABASE_URL="{{DB_DSN}}" go run .
+    JWT_SECRET=dev DATABASE_URL="{{DB_DSN}}" go run .
 
 psql: db
     docker compose exec -it postgres psql -U db
