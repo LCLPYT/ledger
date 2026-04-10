@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -61,6 +62,12 @@ func mustCreateUser(t *testing.T, username, email, password string) int64 {
 		t.Fatalf("mustCreateUser insert: %v", err)
 	}
 	return id
+}
+
+func mustAddPermission(t *testing.T, userID int64, permission string) {
+	parts := strings.Split(permission, ".")
+
+	mustAddPolicy(t, userID, parts[0], parts[1])
 }
 
 func mustAddPolicy(t *testing.T, userID int64, obj, act string) {

@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"ledger/handlers"
 	"ledger/middleware"
-	"ledger/permissions"
+	"ledger/perms"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -19,7 +19,7 @@ func createRoleRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/api/v1/roles",
-		middleware.AuthRequired(testEnforcer, testDB, permissions.RolesCreate),
+		middleware.AuthRequired(testEnforcer, testDB, perms.RolesCreate),
 		handlers.CreateRole(testDB))
 	return r
 }
@@ -28,10 +28,10 @@ func roleUsersRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/api/v1/roles/:role/users",
-		middleware.AuthRequired(testEnforcer, testDB, permissions.RolesManageUsers),
+		middleware.AuthRequired(testEnforcer, testDB, perms.RolesManageUsers),
 		handlers.AddUserToRole(testDB, testEnforcer))
 	r.DELETE("/api/v1/roles/:role/users",
-		middleware.AuthRequired(testEnforcer, testDB, permissions.RolesManageUsers),
+		middleware.AuthRequired(testEnforcer, testDB, perms.RolesManageUsers),
 		handlers.RemoveUserFromRole(testDB, testEnforcer))
 	return r
 }
@@ -39,8 +39,8 @@ func roleUsersRouter() *gin.Engine {
 func TestCreateRole_Success(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, userID, "roles", "create")
-	token := mustCreateToken(t, userID, []string{permissions.RolesCreate})
+	mustAddPermission(t, userID, perms.RolesCreate)
+	token := mustCreateToken(t, userID, []string{perms.RolesCreate})
 
 	w := httptest.NewRecorder()
 	createRoleRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/roles", token, `{"name":"admin"}`))
@@ -55,8 +55,8 @@ func TestCreateRole_Success(t *testing.T) {
 func TestCreateRole_Duplicate(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, userID, "roles", "create")
-	token := mustCreateToken(t, userID, []string{permissions.RolesCreate})
+	mustAddPermission(t, userID, perms.RolesCreate)
+	token := mustCreateToken(t, userID, []string{perms.RolesCreate})
 	mustCreateRole(t, "admin")
 
 	w := httptest.NewRecorder()
@@ -68,8 +68,8 @@ func TestCreateRole_Duplicate(t *testing.T) {
 func TestCreateRole_MissingName(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, userID, "roles", "create")
-	token := mustCreateToken(t, userID, []string{permissions.RolesCreate})
+	mustAddPermission(t, userID, perms.RolesCreate)
+	token := mustCreateToken(t, userID, []string{perms.RolesCreate})
 
 	w := httptest.NewRecorder()
 	createRoleRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/roles", token, `{}`))
@@ -89,8 +89,8 @@ func TestCreateRole_Unauthenticated(t *testing.T) {
 func TestCreateRole_Forbidden(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
-	token := mustCreateToken(t, userID, []string{permissions.UserRead})
+	mustAddPermission(t, userID, perms.UserRead)
+	token := mustCreateToken(t, userID, []string{perms.UserRead})
 
 	w := httptest.NewRecorder()
 	createRoleRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/roles", token, `{"name":"admin"}`))
@@ -101,8 +101,8 @@ func TestCreateRole_Forbidden(t *testing.T) {
 func TestAddUserToRole_Success(t *testing.T) {
 	cleanDB(t)
 	callerID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, callerID, "roles", "manage_users")
-	token := mustCreateToken(t, callerID, []string{permissions.RolesManageUsers})
+	mustAddPermission(t, callerID, perms.RolesManageUsers)
+	token := mustCreateToken(t, callerID, []string{perms.RolesManageUsers})
 	targetID := mustCreateUser(t, "bob", "bob@example.com", "x")
 	mustCreateRole(t, "viewer")
 
@@ -119,8 +119,8 @@ func TestAddUserToRole_Success(t *testing.T) {
 func TestAddUserToRole_RoleNotFound(t *testing.T) {
 	cleanDB(t)
 	callerID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, callerID, "roles", "manage_users")
-	token := mustCreateToken(t, callerID, []string{permissions.RolesManageUsers})
+	mustAddPermission(t, callerID, perms.RolesManageUsers)
+	token := mustCreateToken(t, callerID, []string{perms.RolesManageUsers})
 	targetID := mustCreateUser(t, "bob", "bob@example.com", "x")
 
 	body := fmt.Sprintf(`{"user_id":"%d"}`, targetID)
@@ -133,8 +133,8 @@ func TestAddUserToRole_RoleNotFound(t *testing.T) {
 func TestAddUserToRole_AlreadyAssigned(t *testing.T) {
 	cleanDB(t)
 	callerID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, callerID, "roles", "manage_users")
-	token := mustCreateToken(t, callerID, []string{permissions.RolesManageUsers})
+	mustAddPermission(t, callerID, perms.RolesManageUsers)
+	token := mustCreateToken(t, callerID, []string{perms.RolesManageUsers})
 	targetID := mustCreateUser(t, "bob", "bob@example.com", "x")
 	mustCreateRole(t, "viewer")
 	_, err := testEnforcer.AddGroupingPolicy(fmt.Sprintf("%d", targetID), "viewer")
@@ -160,8 +160,8 @@ func TestAddUserToRole_Unauthenticated(t *testing.T) {
 func TestRemoveUserFromRole_Success(t *testing.T) {
 	cleanDB(t)
 	callerID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, callerID, "roles", "manage_users")
-	token := mustCreateToken(t, callerID, []string{permissions.RolesManageUsers})
+	mustAddPermission(t, callerID, perms.RolesManageUsers)
+	token := mustCreateToken(t, callerID, []string{perms.RolesManageUsers})
 	targetID := mustCreateUser(t, "bob", "bob@example.com", "x")
 	mustCreateRole(t, "viewer")
 	_, err := testEnforcer.AddGroupingPolicy(fmt.Sprintf("%d", targetID), "viewer")
@@ -180,8 +180,8 @@ func TestRemoveUserFromRole_Success(t *testing.T) {
 func TestRemoveUserFromRole_RoleNotFound(t *testing.T) {
 	cleanDB(t)
 	callerID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, callerID, "roles", "manage_users")
-	token := mustCreateToken(t, callerID, []string{permissions.RolesManageUsers})
+	mustAddPermission(t, callerID, perms.RolesManageUsers)
+	token := mustCreateToken(t, callerID, []string{perms.RolesManageUsers})
 
 	w := httptest.NewRecorder()
 	roleUsersRouter().ServeHTTP(w, authedRequest(http.MethodDelete, "/api/v1/roles/nonexistent/users", token, `{"user_id":"1"}`))
@@ -192,8 +192,8 @@ func TestRemoveUserFromRole_RoleNotFound(t *testing.T) {
 func TestRemoveUserFromRole_NotAssigned(t *testing.T) {
 	cleanDB(t)
 	callerID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, callerID, "roles", "manage_users")
-	token := mustCreateToken(t, callerID, []string{permissions.RolesManageUsers})
+	mustAddPermission(t, callerID, perms.RolesManageUsers)
+	token := mustCreateToken(t, callerID, []string{perms.RolesManageUsers})
 	targetID := mustCreateUser(t, "bob", "bob@example.com", "x")
 	mustCreateRole(t, "viewer")
 

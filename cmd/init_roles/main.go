@@ -3,7 +3,7 @@ package main
 import (
 	"fmt"
 	"ledger/db"
-	"ledger/permissions"
+	"ledger/perms"
 	"log"
 	"os"
 )
@@ -36,5 +36,5 @@ func main() {
 	}
 
 	fmt.Printf("Default role initialized with permissions: %s, %s\n",
-		permissions.UserRead, permissions.UserCreateToken)
+		perms.UserRead, perms.UserCreateToken)
 }

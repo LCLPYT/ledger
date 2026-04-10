@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"ledger/handlers"
 	"ledger/middleware"
-	"ledger/permissions"
+	"ledger/perms"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -18,7 +18,7 @@ func listPermissionsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/api/v1/permissions",
-		middleware.AuthRequired(testEnforcer, testDB, permissions.PermissionsList),
+		middleware.AuthRequired(testEnforcer, testDB, perms.PermissionsList),
 		handlers.ListPermissions())
 	return r
 }
@@ -26,8 +26,8 @@ func listPermissionsRouter() *gin.Engine {
 func TestListPermissions_Success(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, userID, "permissions", "list")
-	token := mustCreateToken(t, userID, []string{permissions.PermissionsList})
+	mustAddPermission(t, userID, perms.PermissionsList)
+	token := mustCreateToken(t, userID, []string{perms.PermissionsList})
 
 	w := httptest.NewRecorder()
 	listPermissionsRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/permissions", token, ""))
@@ -35,7 +35,7 @@ func TestListPermissions_Success(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 	var resp map[string][]string
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
-	assert.ElementsMatch(t, permissions.All, resp["permissions"])
+	assert.ElementsMatch(t, perms.All, resp["permissions"])
 }
 
 func TestListPermissions_Unauthenticated(t *testing.T) {
@@ -50,8 +50,8 @@ func TestListPermissions_Unauthenticated(t *testing.T) {
 func TestListPermissions_Forbidden(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
-	token := mustCreateToken(t, userID, []string{permissions.UserRead})
+	mustAddPermission(t, userID, perms.UserRead)
+	token := mustCreateToken(t, userID, []string{perms.UserRead})
 
 	w := httptest.NewRecorder()
 	listPermissionsRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/permissions", token, ""))

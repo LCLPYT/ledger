@@ -5,7 +5,7 @@ import (
 	_ "embed"
 	"ledger/handlers"
 	"ledger/middleware"
-	"ledger/permissions"
+	"ledger/perms"
 	"net/http"
 
 	"github.com/casbin/casbin/v2"
@@ -28,14 +28,14 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 
 	user := v1.Group("/user")
 	user.POST("/login", handlers.Login(db, enforcer))
-	user.POST("/token", middleware.AuthRequired(enforcer, db, permissions.UserCreateToken), handlers.CreateToken(db, enforcer))
-	user.GET("", middleware.AuthRequired(enforcer, db, permissions.UserRead), handlers.GetUser(db))
+	user.POST("/token", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.CreateToken(db, enforcer))
+	user.GET("", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUser(db))
 
 	roles := v1.Group("/roles")
-	roles.POST("", middleware.AuthRequired(enforcer, db, permissions.RolesCreate), handlers.CreateRole(db))
-	roles.POST("/:role/users", middleware.AuthRequired(enforcer, db, permissions.RolesManageUsers), handlers.AddUserToRole(db, enforcer))
-	roles.DELETE("/:role/users", middleware.AuthRequired(enforcer, db, permissions.RolesManageUsers), handlers.RemoveUserFromRole(db, enforcer))
+	roles.POST("", middleware.AuthRequired(enforcer, db, perms.RolesCreate), handlers.CreateRole(db))
+	roles.POST("/:role/users", middleware.AuthRequired(enforcer, db, perms.RolesManageUsers), handlers.AddUserToRole(db, enforcer))
+	roles.DELETE("/:role/users", middleware.AuthRequired(enforcer, db, perms.RolesManageUsers), handlers.RemoveUserFromRole(db, enforcer))
 
 	perms := v1.Group("/permissions")
-	perms.GET("", middleware.AuthRequired(enforcer, db, permissions.PermissionsList), handlers.ListPermissions())
+	perms.GET("", middleware.AuthRequired(enforcer, db, perms.Perms2List), handlers.ListPermissions())
 }

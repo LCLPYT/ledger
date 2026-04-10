@@ -3,6 +3,7 @@ package handlers_test
 import (
 	"encoding/json"
 	"ledger/middleware"
+	"ledger/perms"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -67,7 +68,7 @@ func postLogin(r *gin.Engine, body string) *httptest.ResponseRecorder {
 func TestLogin_Success(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "secret123")
-	mustAddPolicy(t, userID, "user", "read")
+	mustAddPermission(t, userID, perms.UserRead)
 
 	tests := []struct {
 		name       string
@@ -117,7 +118,7 @@ func TestLogin_MissingFields(t *testing.T) {
 func TestLogin_TokenStoredInDB(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "dave", "dave@example.com", "pass")
-	mustAddPolicy(t, userID, "user", "read")
+	mustAddPermission(t, userID, perms.UserRead)
 
 	w := postLogin(loginRouter(), `{"identifier":"dave","password":"pass"}`)
 	require.Equal(t, http.StatusOK, w.Code)
@@ -134,8 +135,8 @@ func TestLogin_TokenStoredInDB(t *testing.T) {
 func TestCreateToken_Success(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
-	mustAddPolicy(t, userID, "user", "create_token")
+	mustAddPermission(t, userID, perms.UserRead)
+	mustAddPermission(t, userID, perms.UserCreateToken)
 	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
 
 	body := `{"name":"ci","scopes":["user.read"],"expiry":"` + time.Now().Add(24*time.Hour).Format(time.RFC3339) + `"}`
@@ -162,8 +163,8 @@ func TestCreateToken_ForbiddenScope(t *testing.T) {
 	cleanDB(t)
 	// User has "user.read" and "user.create_token" but not "admin.delete"
 	userID := mustCreateUser(t, "bob", "bob@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
-	mustAddPolicy(t, userID, "user", "create_token")
+	mustAddPermission(t, userID, perms.UserRead)
+	mustAddPermission(t, userID, perms.UserCreateToken)
 	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
 
 	body := `{"name":"evil","scopes":["admin.delete"],"expiry":"` + time.Now().Add(time.Hour).Format(time.RFC3339) + `"}`
@@ -176,8 +177,8 @@ func TestCreateToken_ForbiddenScope(t *testing.T) {
 func TestCreateToken_ExpiryTooFar(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "carol", "carol@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
-	mustAddPolicy(t, userID, "user", "create_token")
+	mustAddPermission(t, userID, perms.UserRead)
+	mustAddPermission(t, userID, perms.UserCreateToken)
 	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
 
 	body := `{"name":"x","scopes":["user.read"],"expiry":"` + time.Now().AddDate(2, 0, 0).Format(time.RFC3339) + `"}`
@@ -190,8 +191,8 @@ func TestCreateToken_ExpiryTooFar(t *testing.T) {
 func TestCreateToken_InvalidScopeFormat(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "dave", "dave@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
-	mustAddPolicy(t, userID, "user", "create_token")
+	mustAddPermission(t, userID, perms.UserRead)
+	mustAddPermission(t, userID, perms.UserCreateToken)
 	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
 
 	body := `{"name":"x","scopes":["notavalidscope"],"expiry":"` + time.Now().Add(time.Hour).Format(time.RFC3339) + `"}`
@@ -204,8 +205,8 @@ func TestCreateToken_InvalidScopeFormat(t *testing.T) {
 func TestCreateToken_StoredInDB(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "eve", "eve@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
-	mustAddPolicy(t, userID, "user", "create_token")
+	mustAddPermission(t, userID, perms.UserRead)
+	mustAddPermission(t, userID, perms.UserCreateToken)
 	token := mustCreateToken(t, userID, []string{"user.read", "user.create_token"})
 
 	body := `{"name":"mytoken","scopes":["user.read"],"expiry":"` + time.Now().Add(24*time.Hour).Format(time.RFC3339) + `"}`
@@ -225,7 +226,7 @@ func TestCreateToken_StoredInDB(t *testing.T) {
 func TestGetUser_Success(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "frank", "frank@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
+	mustAddPermission(t, userID, perms.UserRead)
 	token := mustCreateToken(t, userID, []string{"user.read"})
 
 	w := httptest.NewRecorder()
@@ -250,7 +251,7 @@ func TestGetUser_Unauthenticated(t *testing.T) {
 func TestGetUser_RevokedToken(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "grace", "grace@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
+	mustAddPermission(t, userID, perms.UserRead)
 	token := mustCreateToken(t, userID, []string{"user.read"})
 
 	_, err := testDB.Exec("UPDATE access_tokens SET revoked = true WHERE user_id = $1", userID)
@@ -266,8 +267,8 @@ func TestGetUser_InsufficientScope(t *testing.T) {
 	cleanDB(t)
 	// Token only has "user.create_token" scope, not "user.read"
 	userID := mustCreateUser(t, "henry", "henry@example.com", "x")
-	mustAddPolicy(t, userID, "user", "read")
-	mustAddPolicy(t, userID, "user", "create_token")
+	mustAddPermission(t, userID, perms.UserRead)
+	mustAddPermission(t, userID, perms.UserCreateToken)
 	token := mustCreateToken(t, userID, []string{"user.create_token"})
 
 	w := httptest.NewRecorder()
