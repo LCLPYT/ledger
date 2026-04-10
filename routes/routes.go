@@ -36,6 +36,6 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	roles.POST("/:role/users", middleware.AuthRequired(enforcer, db, perms.RolesManageUsers), handlers.AddUserToRole(db, enforcer))
 	roles.DELETE("/:role/users", middleware.AuthRequired(enforcer, db, perms.RolesManageUsers), handlers.RemoveUserFromRole(db, enforcer))
 
-	perms := v1.Group("/permissions")
-	perms.GET("", middleware.AuthRequired(enforcer, db, perms.Perms2List), handlers.ListPermissions())
+	permissions := v1.Group("/permissions")
+	permissions.GET("", middleware.AuthRequired(enforcer, db, perms.PermissionsList), handlers.ListPermissions())
 }
