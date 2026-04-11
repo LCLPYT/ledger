@@ -1,5 +1,5 @@
 <template>
-  <div class="p-8">
+  <div class="p-4 md:p-8">
     <div class="max-w-2xl space-y-2">
       <h2 class="text-2xl font-semibold text-foreground">
         Welcome{{ user ? `, ${user.username}` : '' }}

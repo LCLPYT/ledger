@@ -1,5 +1,5 @@
 <template>
-  <div class="p-8 space-y-6">
+  <div class="p-4 md:p-8 space-y-6">
     <h2 class="text-2xl font-semibold text-foreground">Users</h2>
 
     <!-- Error state -->
@@ -7,7 +7,7 @@
 
     <!-- Users table -->
     <template v-else>
-      <div class="rounded-lg border">
+      <div class="rounded-lg border overflow-x-auto">
         <Table>
           <TableHeader>
             <TableRow>
