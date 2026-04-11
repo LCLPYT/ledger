@@ -2,10 +2,12 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"ledger/auth"
 	"ledger/middleware"
 	"ledger/perms"
 	"net/http"
 	"net/http/httptest"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -16,6 +18,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func refreshSessionRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.POST("/api/v1/user/session/refresh", middleware.SessionRequired, handlers.RefreshSession())
+	return r
+}
 
 func loginRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
@@ -332,4 +341,91 @@ func TestGetUser_InsufficientScope(t *testing.T) {
 	getUserRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/user", token, ""))
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestRefreshSession_Success(t *testing.T) {
+	cleanDB(t)
+	mustCreateUser(t, "alice", "alice@example.com", "secret123")
+
+	w := postLogin(loginRouter(), `{"identifier":"alice","password":"secret123"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	var loginResp map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&loginResp))
+	sessionToken := loginResp["token"]
+
+	w2 := httptest.NewRecorder()
+	refreshSessionRouter().ServeHTTP(w2, authedRequest(http.MethodPost, "/api/v1/user/session/refresh", sessionToken, ""))
+
+	require.Equal(t, http.StatusOK, w2.Code)
+	var resp map[string]string
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&resp))
+	assert.NotEmpty(t, resp["token"])
+}
+
+func TestRefreshSession_NewTokenIsValid(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "alice", "alice@example.com", "secret123")
+	mustAddPermission(t, userID, perms.UserRead)
+
+	w := postLogin(loginRouter(), `{"identifier":"alice","password":"secret123"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	var loginResp map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&loginResp))
+	sessionToken := loginResp["token"]
+
+	w2 := httptest.NewRecorder()
+	refreshSessionRouter().ServeHTTP(w2, authedRequest(http.MethodPost, "/api/v1/user/session/refresh", sessionToken, ""))
+	require.Equal(t, http.StatusOK, w2.Code)
+	var refreshResp map[string]string
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&refreshResp))
+	newToken := refreshResp["token"]
+
+	// New session token must work for authenticated endpoints.
+	w3 := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w3, authedRequest(http.MethodGet, "/api/v1/user", newToken, ""))
+	assert.Equal(t, http.StatusOK, w3.Code)
+}
+
+func TestRefreshSession_Unauthenticated(t *testing.T) {
+	cleanDB(t)
+
+	w := httptest.NewRecorder()
+	refreshSessionRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/session/refresh", "", ""))
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
+func TestRefreshSession_AccessTokenRejected(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "bob", "bob@example.com", "x")
+	mustAddPermission(t, userID, perms.UserRead)
+	accessToken := mustCreateToken(t, userID, []string{"user.read"})
+
+	w := httptest.NewRecorder()
+	refreshSessionRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/session/refresh", accessToken, ""))
+
+	// SessionRequired must reject non-session tokens.
+	assert.Equal(t, http.StatusForbidden, w.Code)
+}
+
+func TestRefreshSession_ExpiredSessionToken(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "carol", "carol@example.com", "x")
+
+	// Generate an already-expired session token by using GenerateToken with past expiry
+	// (no direct way to create an expired session token via the public API, so craft one
+	// via the access-token path with a past expiry and confirm the middleware rejects it).
+	expiredToken, err := auth.GenerateToken(
+		strconv.FormatInt(userID, 10),
+		[]string{"user.read"},
+		time.Now().Add(-time.Hour),
+		testDB,
+		"expired",
+	)
+	require.NoError(t, err)
+
+	w := httptest.NewRecorder()
+	refreshSessionRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/session/refresh", expiredToken, ""))
+
+	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

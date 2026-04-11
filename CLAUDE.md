@@ -14,8 +14,11 @@ just delete_db      # Stop postgres and delete the volume
 just psql           # Open a psql shell in the container
 just create_user    # Interactive CLI to create a user in the DB
 just build          # Build optimized binary
-just test           # run tests
+just test           # run tests (uses port 5433 — test DB)
+just test TestFoo   # run only tests matching "TestFoo"
 ```
+
+> **WARNING — never run tests against port 5432.** Tests call `TRUNCATE` on startup and will wipe the development database. Always use `just test`, which targets the dedicated test container on port 5433.
 
 Run the server manually:
 ```sh
