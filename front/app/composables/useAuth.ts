@@ -5,14 +5,15 @@ interface User {
   created: string
 }
 
-// Session tokens last 1 hour — keep cookie in sync
+// Session tokens last 1 hour - keep cookie in sync
 const SESSION_MAX_AGE = 3600
 // Refresh when less than 30 minutes remain
 const REFRESH_THRESHOLD = 1800
 
 function tokenExpiresAt(jwt: string): number {
   try {
-    const payload = JSON.parse(atob(jwt.split('.')[1]))
+    let tok = jwt.split('.')[1] ?? '';
+    const payload = JSON.parse(atob(tok))
     return payload.exp as number // Unix seconds
   } catch {
     return 0
