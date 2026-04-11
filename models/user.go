@@ -20,3 +20,12 @@ type TokenRequest struct {
 	Scopes []string  `json:"scopes"`
 	Expiry time.Time `json:"expiry"`
 }
+
+type AccessToken struct {
+	ID        int64     `json:"id"`
+	Name      string    `json:"name"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Revoked   bool      `json:"revoked"`
+	Scopes    []string  `json:"scopes"`
+}

@@ -63,6 +63,48 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/user/tokens:
+    get:
+      summary: List the authenticated user's access tokens
+      responses:
+        "200":
+          description: List of access tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/AccessToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/user/tokens/{id}:
+    delete:
+      summary: Revoke an access token
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+          example: 7
+      responses:
+        "200":
+          description: Token revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/user/token:
     post:
       summary: Create a named access token with a subset of the user's scopes
@@ -163,6 +205,115 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+
+  /api/v1/roles/{role}:
+    delete:
+      summary: Delete a role (protected roles cannot be deleted)
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+          example: myrole
+      responses:
+        "200":
+          description: Role deleted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/roles/{role}/permissions:
+    get:
+      summary: List permissions assigned to a role
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+          example: admin
+      responses:
+        "200":
+          description: List of permission strings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+                example: ["user.read", "users.read"]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+    post:
+      summary: Add a permission to a role
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+          example: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RolePermissionRequest"
+      responses:
+        "200":
+          description: Permission added
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+    delete:
+      summary: Remove a permission from a role
+      parameters:
+        - name: role
+          in: path
+          required: true
+          schema:
+            type: string
+          example: admin
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RolePermissionRequest"
+      responses:
+        "200":
+          description: Permission removed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
 
   /api/v1/roles/{role}/users:
     post:
@@ -317,6 +468,40 @@ components:
           type: string
           example: admin
 
+    AccessToken:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 7
+        name:
+          type: string
+          example: ci-token
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        revoked:
+          type: boolean
+          example: false
+        scopes:
+          type: array
+          items:
+            type: string
+          example: ["user.read"]
+
+    RolePermissionRequest:
+      type: object
+      required: [permission]
+      properties:
+        permission:
+          type: string
+          pattern: '^\w+\.\w+$'
+          example: users.read
+
     Role:
       type: object
       properties:
@@ -330,6 +515,9 @@ components:
         created_at:
           type: string
           format: date-time
+        protected:
+          type: boolean
+          example: false
 
     RoleWithMembers:
       allOf:

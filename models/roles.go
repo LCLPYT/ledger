@@ -6,6 +6,7 @@ type Role struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`
 	CreatedAt time.Time `json:"created_at"`
+	Protected bool      `json:"protected"`
 }
 
 type RoleWithMembers struct {
@@ -19,4 +20,8 @@ type CreateRoleRequest struct {
 
 type RoleUserRequest struct {
 	UserID string `json:"user_id" binding:"required"`
+}
+
+type RolePermissionRequest struct {
+	Permission string `json:"permission" binding:"required"`
 }

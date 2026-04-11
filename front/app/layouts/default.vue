@@ -75,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { LayoutDashboard, Users, Menu } from 'lucide-vue-next'
+import { LayoutDashboard, Users, Shield, KeyRound, Menu } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 
@@ -91,6 +91,8 @@ watch(route, () => {
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard },
   { to: '/users', label: 'Users', icon: Users },
+  { to: '/roles', label: 'Roles', icon: Shield },
+  { to: '/tokens', label: 'Tokens', icon: KeyRound },
 ]
 
 await fetchUser()

@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"ledger/auth"
 	"ledger/models"
@@ -102,6 +103,69 @@ func CreateToken(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"token": token})
+	}
+}
+
+func ListTokens(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetString("userID")
+
+		rows, err := db.Query(
+			"SELECT id, name, created_at, expires_at, revoked, scopes FROM access_tokens WHERE user_id = $1 ORDER BY created_at DESC",
+			userID,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		defer func() { _ = rows.Close() }()
+
+		tokens := make([]models.AccessToken, 0)
+		for rows.Next() {
+			var t models.AccessToken
+			var scopesJSON []byte
+			if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt, &t.ExpiresAt, &t.Revoked, &scopesJSON); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+				return
+			}
+			if err := json.Unmarshal(scopesJSON, &t.Scopes); err != nil {
+				t.Scopes = []string{}
+			}
+			tokens = append(tokens, t)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, tokens)
+	}
+}
+
+func RevokeToken(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetString("userID")
+		tokenID := c.Param("id")
+
+		result, err := db.Exec(
+			"UPDATE access_tokens SET revoked = TRUE WHERE id = $1 AND user_id = $2 AND revoked = FALSE",
+			tokenID, userID,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		n, err := result.RowsAffected()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		if n == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "token not found or already revoked"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "token revoked"})
 	}
 }
 

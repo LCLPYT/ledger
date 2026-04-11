@@ -23,7 +23,7 @@ func main() {
 
 	for _, role := range []string{"default", "admin"} {
 		_, err := database.Exec(
-			"INSERT INTO roles (name) VALUES ($1) ON CONFLICT DO NOTHING", role,
+			"INSERT INTO roles (name, protected) VALUES ($1, TRUE) ON CONFLICT DO NOTHING", role,
 		)
 		if err != nil {
 			log.Fatalf("Failed to create %s role: %v", role, err)
