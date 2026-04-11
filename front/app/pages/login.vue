@@ -34,19 +34,17 @@
 
         <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 
-        <button
-          type="submit"
-          :disabled="loading"
-          class="w-full py-2 px-4 bg-primary text-primary-foreground rounded-md text-sm font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-        >
-          {{ loading ? 'Signing in…' : 'Sign in' }}
-        </button>
+        <Button type="submit" :disabled="loading">
+          {{ loading ? 'Signing in...' : 'Sign in' }}
+        </Button>
       </form>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
+import {Button} from "~/components/ui/button";
+
 definePageMeta({
   layout: false,
   middleware: [],
