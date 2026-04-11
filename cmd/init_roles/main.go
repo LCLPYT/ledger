@@ -6,7 +6,13 @@ import (
 	"ledger/perms"
 	"log"
 	"os"
+	"strings"
 )
+
+func permPolicy(role, perm string) []string {
+	parts := strings.SplitN(perm, ".", 2)
+	return []string{role, parts[0], parts[1]}
+}
 
 func main() {
 	dsn := os.Getenv("DATABASE_URL")
@@ -15,18 +21,23 @@ func main() {
 
 	enforcer := db.InitCasbin(dsn)
 
-	_, err := database.Exec(
-		"INSERT INTO roles (name) VALUES ('default') ON CONFLICT DO NOTHING",
-	)
-	if err != nil {
-		log.Fatalf("Failed to create default role: %v", err)
+	for _, role := range []string{"default", "admin"} {
+		_, err := database.Exec(
+			"INSERT INTO roles (name) VALUES ($1) ON CONFLICT DO NOTHING", role,
+		)
+		if err != nil {
+			log.Fatalf("Failed to create %s role: %v", role, err)
+		}
 	}
 
-	policies := [][]string{
-		{"default", "user", "read"},
-		{"default", "user", "create_token"},
+	defaultPerms := []string{perms.UserRead, perms.UserCreateToken}
+	var policies [][]string
+	for _, p := range defaultPerms {
+		policies = append(policies, permPolicy("default", p))
 	}
-	_, err = enforcer.AddPolicies(policies)
+	policies = append(policies, []string{"admin", "*", "*"})
+
+	_, err := enforcer.AddPolicies(policies)
 	if err != nil {
 		log.Fatalf("Failed to add policies: %v", err)
 	}
@@ -37,4 +48,5 @@ func main() {
 
 	fmt.Printf("Default role initialized with permissions: %s, %s\n",
 		perms.UserRead, perms.UserCreateToken)
+	fmt.Println("Admin role initialized with wildcard policy (*.*)")
 }

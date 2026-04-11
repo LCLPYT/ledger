@@ -44,6 +44,10 @@ func main() {
 		log.Fatal(err)
 	}
 
+	fmt.Print("Grant admin privileges? [y/N]: ")
+	adminInput, _ := reader.ReadString('\n')
+	isAdmin := strings.TrimSpace(strings.ToLower(adminInput)) == "y"
+
 	var id int64
 	err = database.QueryRow(
 		"INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id",
@@ -54,9 +58,19 @@ func main() {
 		log.Fatal(err)
 	}
 
-	if _, err := enforcer.AddGroupingPolicy(strconv.FormatInt(id, 10), "default"); err != nil {
+	uid := strconv.FormatInt(id, 10)
+	if _, err := enforcer.AddGroupingPolicy(uid, "default"); err != nil {
 		log.Fatalf("Failed to assign default role: %v", err)
 	}
+	if isAdmin {
+		if _, err := enforcer.AddGroupingPolicy(uid, "admin"); err != nil {
+			log.Fatalf("Failed to assign admin role: %v", err)
+		}
+	}
 
-	fmt.Printf("User created successfully with ID: %d\n", id)
+	role := "default"
+	if isAdmin {
+		role = "default, admin"
+	}
+	fmt.Printf("User created successfully with ID: %d (roles: %s)\n", id, role)
 }
