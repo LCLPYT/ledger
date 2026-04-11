@@ -16,7 +16,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func Login(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+func Login(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.LoginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -44,20 +44,7 @@ func Login(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 
 		userIDStr := strconv.FormatInt(userID, 10)
 
-		rawPerms, err := enforcer.GetImplicitPermissionsForUser(userIDStr)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch permissions"})
-			return
-		}
-
-		scopes := make([]string, 0, len(rawPerms))
-		for _, p := range rawPerms {
-			if len(p) >= 3 {
-				scopes = append(scopes, p[1]+"."+p[2])
-			}
-		}
-
-		token, err := auth.GenerateToken(userIDStr, scopes, time.Now().Add(7*24*time.Hour), db, "session")
+		token, err := auth.GenerateSessionToken(userIDStr)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 			return

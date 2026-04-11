@@ -20,7 +20,7 @@ import (
 func loginRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/user/login", handlers.Login(testDB, testEnforcer))
+	r.POST("/api/v1/user/login", handlers.Login(testDB))
 	return r
 }
 
@@ -113,23 +113,6 @@ func TestLogin_MissingFields(t *testing.T) {
 	w := postLogin(loginRouter(), `{}`)
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
-}
-
-func TestLogin_TokenStoredInDB(t *testing.T) {
-	cleanDB(t)
-	userID := mustCreateUser(t, "dave", "dave@example.com", "pass")
-	mustAddPermission(t, userID, perms.UserRead)
-
-	w := postLogin(loginRouter(), `{"identifier":"dave","password":"pass"}`)
-	require.Equal(t, http.StatusOK, w.Code)
-
-	var count int
-	err := testDB.QueryRow(
-		"SELECT COUNT(*) FROM access_tokens WHERE user_id = $1 AND name = 'session' AND revoked = false",
-		userID,
-	).Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count)
 }
 
 func TestCreateToken_Success(t *testing.T) {

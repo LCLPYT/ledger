@@ -31,49 +31,74 @@ func AuthRequired(enforcer *casbin.Enforcer, db *sql.DB, requiredPermissions ...
 			return
 		}
 
-		var scopesJson []byte
-		var revoked bool
-		err = db.QueryRow(
-			"SELECT scopes, revoked FROM access_tokens WHERE id = $1 AND user_id = $2 AND expires_at > now()",
-			claims.TokenId, claims.UserID,
-		).Scan(&scopesJson, &revoked)
+		c.Set("userID", claims.UserID)
 
-		if err != nil || revoked {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		if claims.Type == auth.TypeAccessToken {
+			HandleAccessTokenAuth(c, db, claims, requiredPermissions, enforcer)
 			return
 		}
 
-		var scopes []string
-		if err := json.Unmarshal(scopesJson, &scopes); err != nil {
+		if claims.Type == auth.TypeSession {
+			HandleSessionTokenAuth(c, requiredPermissions, enforcer)
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token type"})
+		return
+	}
+}
+
+func HandleSessionTokenAuth(c *gin.Context, requiredPermissions []string, enforcer *casbin.Enforcer) {
+	// TODO implement
+}
+
+func HandleAccessTokenAuth(
+	c *gin.Context,
+	db *sql.DB,
+	claims *auth.Claims,
+	requiredPermissions []string,
+	enforcer *casbin.Enforcer,
+) {
+	var scopesJson []byte
+	var revoked bool
+	err := db.QueryRow(
+		"SELECT scopes, revoked FROM access_tokens WHERE id = $1 AND user_id = $2 AND expires_at > now()",
+		claims.TokenId, claims.UserID,
+	).Scan(&scopesJson, &revoked)
+
+	if err != nil || revoked {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+
+	var scopes []string
+	if err := json.Unmarshal(scopesJson, &scopes); err != nil {
+		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+		return
+	}
+
+	for _, permission := range requiredPermissions {
+		parts := strings.SplitN(permission, ".", 2)
+		if len(parts) != 2 {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 			return
 		}
+		obj, act := parts[0], parts[1]
 
-		c.Set("userID", claims.UserID)
-
-		for _, required := range requiredPermissions {
-			parts := strings.SplitN(required, ".", 2)
-			if len(parts) != 2 {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
-				return
-			}
-			obj, act := parts[0], parts[1]
-
-			granted := false
-			for _, scope := range scopes {
-				ok, _ := enforcer.Enforce(claims.UserID, obj, act, scope)
-				if ok {
-					granted = true
-					break
-				}
-			}
-
-			if !granted {
-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
-				return
+		granted := false
+		for _, scope := range scopes {
+			ok, _ := enforcer.Enforce(claims.UserID, obj, act, scope)
+			if ok {
+				granted = true
+				break
 			}
 		}
 
-		c.Next()
+		if !granted {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 	}
+
+	c.Next()
 }
