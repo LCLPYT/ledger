@@ -70,7 +70,39 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/users:
+    get:
+      summary: List all users
+      responses:
+        "200":
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/User"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/roles:
+    get:
+      summary: List all roles with their members
+      responses:
+        "200":
+          description: List of roles
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/RoleWithMembers"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
     post:
       summary: Create a new role
       requestBody:
@@ -282,6 +314,18 @@ components:
         created_at:
           type: string
           format: date-time
+
+    RoleWithMembers:
+      allOf:
+        - $ref: "#/components/schemas/Role"
+        - type: object
+          properties:
+            members:
+              type: array
+              items:
+                type: string
+              description: User IDs assigned to this role
+              example: ["1", "42"]
 
     RoleUserRequest:
       type: object
