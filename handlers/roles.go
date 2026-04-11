@@ -11,6 +11,42 @@ import (
 	"github.com/lib/pq"
 )
 
+func ListRoles(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		rows, err := db.Query("SELECT id, name, created_at FROM roles ORDER BY name")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		defer func() { _ = rows.Close() }()
+
+		result := make([]models.RoleWithMembers, 0)
+		for rows.Next() {
+			var r models.RoleWithMembers
+			if err := rows.Scan(&r.ID, &r.Name, &r.CreatedAt); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+				return
+			}
+			members, err := enforcer.GetUsersForRole(r.Name)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch role members"})
+				return
+			}
+			if members == nil {
+				members = []string{}
+			}
+			r.Members = members
+			result = append(result, r)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, result)
+	}
+}
+
 func CreateRole(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.CreateRoleRequest

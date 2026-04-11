@@ -8,6 +8,11 @@ type Role struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type RoleWithMembers struct {
+	Role
+	Members []string `json:"members"`
+}
+
 type CreateRoleRequest struct {
 	Name string `json:"name" binding:"required"`
 }

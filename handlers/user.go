@@ -106,6 +106,33 @@ func CreateToken(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	}
 }
 
+func ListUsers(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		rows, err := db.Query("SELECT id, username, email, created_at FROM users ORDER BY created_at DESC")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		defer func() { _ = rows.Close() }()
+
+		users := make([]models.User, 0)
+		for rows.Next() {
+			var u models.User
+			if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Created); err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+				return
+			}
+			users = append(users, u)
+		}
+		if err := rows.Err(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, users)
+	}
+}
+
 func GetUser(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetString("userID")
