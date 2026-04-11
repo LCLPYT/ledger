@@ -7,8 +7,6 @@
 
     <!-- Users table -->
     <template v-else>
-      <p v-if="removeError" class="text-sm text-destructive">{{ removeError }}</p>
-
       <div class="rounded-lg border">
         <Table>
           <TableHeader>
@@ -104,6 +102,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
 import { Label } from '@/components/ui/label'
+import { toast } from 'vue-sonner'
 
 definePageMeta({
   middleware: ['auth'],
@@ -128,7 +127,6 @@ interface Role {
 const users = ref<User[]>([])
 const roles = ref<Role[]>([])
 const fetchError = ref('')
-const removeError = ref('')
 
 async function load() {
   try {
@@ -180,32 +178,36 @@ async function assignRole() {
   if (!dialog.user || !dialog.selectedRole) return
   dialog.loading = true
   dialog.error = ''
+  const { user, selectedRole } = dialog
   try {
-    await apiFetch(`/api/v1/roles/${dialog.selectedRole}/users`, {
+    await apiFetch(`/api/v1/roles/${selectedRole}/users`, {
       method: 'POST',
-      body: { user_id: String(dialog.user.id) },
+      body: { user_id: String(user.id) },
     })
     await load()
     dialog.open = false
+    toast.success(`Role "${selectedRole}" assigned to ${user.username}`)
   } catch (e: unknown) {
-    const msg = (e as { data?: { error?: string } })?.data?.error
-    dialog.error = msg ?? 'Failed to assign role'
+    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to assign role'
+    dialog.error = msg
+    toast.error(msg)
   } finally {
     dialog.loading = false
   }
 }
 
 async function removeRole(userId: number, roleName: string) {
-  removeError.value = ''
+  const user = users.value.find(u => u.id === userId)
   try {
     await apiFetch(`/api/v1/roles/${roleName}/users`, {
       method: 'DELETE',
       body: { user_id: String(userId) },
     })
     await load()
+    toast.success(`Role "${roleName}" removed from ${user?.username ?? 'user'}`)
   } catch (e: unknown) {
-    const msg = (e as { data?: { error?: string } })?.data?.error
-    removeError.value = msg ?? 'Failed to remove role'
+    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to remove role'
+    toast.error(msg)
   }
 }
 </script>
