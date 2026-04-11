@@ -49,7 +49,24 @@ func AuthRequired(enforcer *casbin.Enforcer, db *sql.DB, requiredPermissions ...
 }
 
 func HandleSessionTokenAuth(c *gin.Context, requiredPermissions []string, enforcer *casbin.Enforcer) {
-	// TODO implement
+	userID := c.GetString("userID")
+
+	for _, permission := range requiredPermissions {
+		parts := strings.SplitN(permission, ".", 2)
+		if len(parts) != 2 {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
+			return
+		}
+		obj, act := parts[0], parts[1]
+
+		ok, _ := enforcer.Enforce(userID, obj, act, permission)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+	}
+
+	c.Next()
 }
 
 func HandleAccessTokenAuth(

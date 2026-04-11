@@ -282,6 +282,44 @@ func TestCreateToken_ViaRole(t *testing.T) {
 	assert.NotEmpty(t, resp["token"])
 }
 
+func TestGetUser_ViaSessionToken(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "alice", "alice@example.com", "secret123")
+	mustAddPermission(t, userID, perms.UserRead)
+
+	w := postLogin(loginRouter(), `{"identifier":"alice","password":"secret123"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	var loginResp map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&loginResp))
+	sessionToken := loginResp["token"]
+	require.NotEmpty(t, sessionToken)
+
+	w2 := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w2, authedRequest(http.MethodGet, "/api/v1/user", sessionToken, ""))
+
+	require.Equal(t, http.StatusOK, w2.Code)
+	var resp map[string]any
+	require.NoError(t, json.NewDecoder(w2.Body).Decode(&resp))
+	assert.Equal(t, "alice", resp["username"])
+}
+
+func TestGetUser_SessionTokenForbidden(t *testing.T) {
+	cleanDB(t)
+	mustCreateUser(t, "bob", "bob@example.com", "secret123")
+
+	w := postLogin(loginRouter(), `{"identifier":"bob","password":"secret123"}`)
+	require.Equal(t, http.StatusOK, w.Code)
+	var loginResp map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&loginResp))
+	sessionToken := loginResp["token"]
+	require.NotEmpty(t, sessionToken)
+
+	w2 := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w2, authedRequest(http.MethodGet, "/api/v1/user", sessionToken, ""))
+
+	assert.Equal(t, http.StatusForbidden, w2.Code)
+}
+
 func TestGetUser_InsufficientScope(t *testing.T) {
 	cleanDB(t)
 	// Token only has "user.create_token" scope, not "user.read"
