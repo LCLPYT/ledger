@@ -14,24 +14,10 @@ import (
 
 func AuthRequired(enforcer *casbin.Enforcer, db *sql.DB, requiredPermissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		claims, done := DecodeJwt(c)
+		if done {
 			return
 		}
-
-		tokenString := strings.TrimPrefix(authHeader, "Bearer ")
-		claims := &auth.Claims{}
-		token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
-			return auth.JwtKey, nil
-		})
-
-		if err != nil || !token.Valid {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
-			return
-		}
-
-		c.Set("userID", claims.UserID)
 
 		if claims.Type == auth.TypeAccessToken {
 			HandleAccessTokenAuth(c, db, claims, requiredPermissions, enforcer)
@@ -46,6 +32,42 @@ func AuthRequired(enforcer *casbin.Enforcer, db *sql.DB, requiredPermissions ...
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token type"})
 		return
 	}
+}
+
+func SessionRequired(c *gin.Context) {
+	claims, done := DecodeJwt(c)
+	if done {
+		return
+	}
+
+	if claims.Type != auth.TypeSession {
+		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not in a session"})
+		return
+	}
+
+	c.Next()
+}
+
+func DecodeJwt(c *gin.Context) (*auth.Claims, bool) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader == "" {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
+		return nil, true
+	}
+
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	claims := &auth.Claims{}
+	token, err := jwt.ParseWithClaims(tokenString, claims, func(token *jwt.Token) (interface{}, error) {
+		return auth.JwtKey, nil
+	})
+
+	if err != nil || !token.Valid {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return nil, true
+	}
+
+	c.Set("userID", claims.UserID)
+	return claims, false
 }
 
 func HandleSessionTokenAuth(c *gin.Context, requiredPermissions []string, enforcer *casbin.Enforcer) {

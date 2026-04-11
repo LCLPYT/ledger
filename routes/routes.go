@@ -38,6 +38,7 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 
 	user := v1.Group("/user")
 	user.POST("/login", handlers.Login(db))
+	user.POST("/session/refresh", middleware.SessionRequired, handlers.RefreshSession())
 	user.POST("/token", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.CreateToken(db, enforcer))
 	user.GET("", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUser(db))
 

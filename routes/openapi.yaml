@@ -47,6 +47,22 @@ paths:
         "400":
           $ref: "#/components/responses/BadRequest"
 
+  /api/v1/user/session/refresh:
+    post:
+      summary: Refresh the current session token
+      description: Issues a new 1-hour session token. Call when the existing token is close to expiry. Only available in session context.
+      responses:
+        "200":
+          description: New session token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/user/token:
     post:
       summary: Create a named access token with a subset of the user's scopes

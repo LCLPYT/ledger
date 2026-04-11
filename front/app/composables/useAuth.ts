@@ -5,9 +5,26 @@ interface User {
   created: string
 }
 
+// Session tokens last 1 hour — keep cookie in sync
+const SESSION_MAX_AGE = 3600
+// Refresh when less than 30 minutes remain
+const REFRESH_THRESHOLD = 1800
+
+function tokenExpiresAt(jwt: string): number {
+  try {
+    const payload = JSON.parse(atob(jwt.split('.')[1]))
+    return payload.exp as number // Unix seconds
+  } catch {
+    return 0
+  }
+}
+
 export const useAuth = () => {
   const config = useRuntimeConfig()
-  const token = useCookie<string | null>('token', { default: () => null })
+  const token = useCookie<string | null>('token', {
+    default: () => null,
+    maxAge: SESSION_MAX_AGE,
+  })
   const user = useState<User | null>('auth:user', () => null)
 
   const apiFetch = $fetch.create({
@@ -46,5 +63,30 @@ export const useAuth = () => {
     await navigateTo('/login')
   }
 
-  return { token, user, login, logout, fetchUser, apiFetch }
+  // Returns 'refreshed' | 'ok' | 'cleared'
+  async function refreshIfNeeded(): Promise<'refreshed' | 'ok' | 'cleared'> {
+    if (!token.value) return 'cleared'
+
+    const exp = tokenExpiresAt(token.value)
+    const secsRemaining = exp - Date.now() / 1000
+    if (secsRemaining >= REFRESH_THRESHOLD) return 'ok'
+
+    try {
+      const res = await apiFetch<{ token: string }>('/api/v1/user/session/refresh', {
+        method: 'POST',
+      })
+      token.value = res.token
+      return 'refreshed'
+    } catch (e: unknown) {
+      const status = (e as { status?: number })?.status
+      if (status === 401 || status === 403) {
+        token.value = null
+        user.value = null
+        return 'cleared'
+      }
+      return 'ok'
+    }
+  }
+
+  return { token, user, login, logout, fetchUser, apiFetch, refreshIfNeeded }
 }

@@ -54,6 +54,18 @@ func Login(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+func RefreshSession() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userID := c.GetString("userID")
+		token, err := auth.GenerateSessionToken(userID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
+			return
+		}
+		c.JSON(http.StatusOK, gin.H{"token": token})
+	}
+}
+
 func CreateToken(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.TokenRequest
