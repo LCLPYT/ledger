@@ -1,4 +1,5 @@
-DB_DSN := "postgres://db:db@localhost:5432/db?sslmode=disable"
+export DATABASE_URL := "postgres://db:db@localhost:5432/db?sslmode=disable"
+export JWT_SECRET := "dev-secret"
 
 db:
     docker compose up postgres -d --wait
@@ -10,22 +11,27 @@ delete_db: stop_db
     docker volume rm ledger_pgdata || true
 
 serve: db
-    JWT_SECRET=dev DATABASE_URL="{{DB_DSN}}" go run .
+    go run .
 
 psql: db
     docker compose exec -it postgres psql -U db
 
 create_user: db
-    JWT_SECRET=dev DATABASE_URL="{{DB_DSN}}" go run cmd/create_user/main.go
+    go run cmd/create_user/main.go
 
 init_roles: db
-    JWT_SECRET=dev DATABASE_URL="{{DB_DSN}}" go run cmd/init_roles/main.go
+    go run cmd/init_roles/main.go
 
+[env("DATABASE_URL", "postgres://db:db@localhost:5433/db?sslmode=disable")]
 test filter="":
     docker compose down postgres_test
     docker volume rm ledger_pgdata_test || true
     docker compose up postgres_test -d --wait
-    JWT_SECRET=test DATABASE_URL="postgres://db:db@localhost:5433/db?sslmode=disable" go test ./handlers/... -v {{ if filter != "" { "-run " + filter } else { "" } }}
+
+    go test ./handlers/... -v {{ if filter != "" { "-run " + filter } else { "" } }}
+
+    docker compose down postgres_test || true
+    docker volume rm ledger_pgdata_test || true
 
 build:
     go build -ldflags "-s -w" .

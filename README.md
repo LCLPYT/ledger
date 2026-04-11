@@ -45,6 +45,7 @@ just test
 - [Just](https://github.com/casey/just) to run saved commands easily
 
 ### Running
+Make sure to run the backend in another terminal, or the dashboard won't be all that useful. 😀
 ```bash
 just front
 ```
