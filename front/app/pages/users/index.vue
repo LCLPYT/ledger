@@ -6,120 +6,109 @@
     <p v-if="fetchError" class="text-sm text-destructive">{{ fetchError }}</p>
 
     <!-- Users table -->
-    <div v-else class="border border-border rounded-lg overflow-hidden">
-      <table class="w-full text-sm">
-        <thead class="bg-muted/50">
-          <tr>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">Username</th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">Email</th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">Created</th>
-            <th class="text-left px-4 py-3 font-medium text-muted-foreground">Roles</th>
-            <th class="px-4 py-3"></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr
-            v-for="u in users"
-            :key="u.id"
-            class="border-t border-border hover:bg-muted/30 transition-colors"
-          >
-            <td class="px-4 py-3 font-medium text-foreground">{{ u.username }}</td>
-            <td class="px-4 py-3 text-muted-foreground">{{ u.email }}</td>
-            <td class="px-4 py-3 text-muted-foreground">{{ formatDate(u.created) }}</td>
-            <td class="px-4 py-3">
-              <div class="flex flex-wrap gap-1">
-                <span
-                  v-for="role in userRoles(u.id)"
-                  :key="role"
-                  class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary"
-                >
-                  {{ role }}
-                  <button
-                    class="hover:text-destructive transition-colors"
-                    title="Remove role"
-                    @click="removeRole(u.id, role)"
+    <template v-else>
+      <p v-if="removeError" class="text-sm text-destructive">{{ removeError }}</p>
+
+      <div class="rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Username</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead>Roles</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            <TableRow v-for="u in users" :key="u.id">
+              <TableCell class="font-medium">{{ u.username }}</TableCell>
+              <TableCell>{{ u.email }}</TableCell>
+              <TableCell>{{ formatDate(u.created) }}</TableCell>
+              <TableCell>
+                <div class="flex flex-wrap gap-1">
+                  <Badge
+                    v-for="role in userRoles(u.id)"
+                    :key="role"
+                    variant="secondary"
+                    class="gap-1"
                   >
-                    ×
-                  </button>
-                </span>
-                <span
-                  v-if="userRoles(u.id).length === 0"
-                  class="text-xs text-muted-foreground"
-                >
-                  —
-                </span>
-              </div>
-            </td>
-            <td class="px-4 py-3 text-right">
-              <button
-                class="text-xs text-primary hover:underline"
-                @click="openAssignDialog(u)"
-              >
-                Assign role
-              </button>
-            </td>
-          </tr>
-          <tr v-if="users.length === 0 && !fetchError">
-            <td colspan="5" class="px-4 py-8 text-center text-muted-foreground">No users found.</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+                    {{ role }}
+                    <button
+                      class="hover:text-destructive transition-colors"
+                      title="Remove role"
+                      @click="removeRole(u.id, role)"
+                    >
+                      ×
+                    </button>
+                  </Badge>
+                  <span v-if="userRoles(u.id).length === 0" class="text-xs text-muted-foreground">—</span>
+                </div>
+              </TableCell>
+              <TableCell class="text-right">
+                <Button variant="ghost" size="sm" @click="openAssignDialog(u)">Assign role</Button>
+              </TableCell>
+            </TableRow>
+            <TableRow v-if="users.length === 0">
+              <TableCell colspan="5" class="text-center text-muted-foreground">No users found.</TableCell>
+            </TableRow>
+          </TableBody>
+        </Table>
+      </div>
+    </template>
 
     <!-- Assign role dialog -->
-    <div
-      v-if="dialog.open"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-      @click.self="dialog.open = false"
-    >
-      <div class="bg-card border border-border rounded-lg p-6 w-80 space-y-4 shadow-lg">
-        <h3 class="font-semibold text-card-foreground">Assign role to {{ dialog.user?.username }}</h3>
+    <Dialog :open="dialog.open" @update:open="dialog.open = $event">
+      <DialogContent class="w-80">
+        <DialogHeader>
+          <DialogTitle>Assign role to {{ dialog.user?.username }}</DialogTitle>
+        </DialogHeader>
 
-        <div class="space-y-1">
-          <label class="text-sm font-medium text-foreground">Role</label>
-          <select
-            v-model="dialog.selectedRole"
-            class="w-full px-3 py-2 border border-input rounded-md bg-background text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          >
-            <option value="" disabled>Select a role…</option>
-            <option
-              v-for="r in availableRoles(dialog.user?.id ?? 0)"
-              :key="r.name"
-              :value="r.name"
-            >
-              {{ r.name }}
-            </option>
-          </select>
+        <div class="space-y-4">
+          <div class="space-y-1">
+            <Label>Role</Label>
+            <Select v-model="dialog.selectedRole">
+              <SelectTrigger class="w-full">
+                <SelectValue placeholder="Select a role…" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="r in availableRoles(dialog.user?.id ?? 0)"
+                  :key="r.name"
+                  :value="r.name"
+                >
+                  {{ r.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <p v-if="dialog.error" class="text-sm text-destructive">{{ dialog.error }}</p>
         </div>
 
-        <p v-if="dialog.error" class="text-sm text-destructive">{{ dialog.error }}</p>
-
-        <div class="flex gap-2 justify-end">
-          <button
-            class="px-3 py-1.5 text-sm rounded-md border border-input hover:bg-muted transition-colors"
-            @click="dialog.open = false"
-          >
-            Cancel
-          </button>
-          <button
-            :disabled="!dialog.selectedRole || dialog.loading"
-            class="px-3 py-1.5 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            @click="assignRole"
-          >
+        <DialogFooter>
+          <Button variant="outline" @click="dialog.open = false">Cancel</Button>
+          <Button :disabled="!dialog.selectedRole || dialog.loading" @click="assignRole">
             {{ dialog.loading ? 'Assigning…' : 'Assign' }}
-          </button>
-        </div>
-      </div>
-    </div>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
 
 <script setup lang="ts">
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Badge } from '@/components/ui/badge'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+
 definePageMeta({
   middleware: ['auth'],
 })
 
-const config = useRuntimeConfig()
 const { apiFetch } = useAuth()
 
 interface User {
@@ -139,6 +128,7 @@ interface Role {
 const users = ref<User[]>([])
 const roles = ref<Role[]>([])
 const fetchError = ref('')
+const removeError = ref('')
 
 async function load() {
   try {
@@ -206,6 +196,7 @@ async function assignRole() {
 }
 
 async function removeRole(userId: number, roleName: string) {
+  removeError.value = ''
   try {
     await apiFetch(`/api/v1/roles/${roleName}/users`, {
       method: 'DELETE',
@@ -214,7 +205,7 @@ async function removeRole(userId: number, roleName: string) {
     await load()
   } catch (e: unknown) {
     const msg = (e as { data?: { error?: string } })?.data?.error
-    alert(msg ?? 'Failed to remove role')
+    removeError.value = msg ?? 'Failed to remove role'
   }
 }
 </script>

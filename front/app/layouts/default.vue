@@ -22,12 +22,7 @@
       <div class="p-3 border-t border-sidebar-border">
         <div class="flex items-center justify-between">
           <span class="text-xs text-sidebar-foreground truncate">{{ user?.username ?? '—' }}</span>
-          <button
-            class="text-xs text-muted-foreground hover:text-foreground transition-colors"
-            @click="logout"
-          >
-            Sign out
-          </button>
+          <Button variant="ghost" size="sm" @click="logout">Sign out</Button>
         </div>
       </div>
     </aside>
@@ -41,6 +36,7 @@
 
 <script setup lang="ts">
 import { LayoutDashboard, Users } from 'lucide-vue-next'
+import { Button } from '@/components/ui/button'
 
 const { user, logout, fetchUser } = useAuth()
 

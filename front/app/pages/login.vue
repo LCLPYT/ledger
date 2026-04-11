@@ -1,49 +1,51 @@
 <template>
   <div class="min-h-screen flex items-center justify-center bg-background">
-    <div class="w-full max-w-sm space-y-6 p-8 border border-border rounded-lg bg-card shadow-sm">
-      <div class="space-y-1">
-        <h1 class="text-2xl font-semibold text-card-foreground">Sign in</h1>
-        <p class="text-sm text-muted-foreground">Enter your username or email</p>
-      </div>
+    <Card class="w-full max-w-sm">
+      <CardHeader>
+        <CardTitle>Sign in</CardTitle>
+        <CardDescription>Enter your username or email</CardDescription>
+      </CardHeader>
+      <CardContent>
+        <form class="space-y-4" @submit.prevent="handleLogin">
+          <div class="space-y-1">
+            <Label for="identifier">Username or email</Label>
+            <Input
+              id="identifier"
+              v-model="form.identifier"
+              type="text"
+              autocomplete="username"
+              required
+              placeholder="admin"
+            />
+          </div>
 
-      <form class="space-y-4" @submit.prevent="handleLogin">
-        <div class="space-y-1">
-          <label class="text-sm font-medium text-foreground" for="identifier">Username or email</label>
-          <input
-            id="identifier"
-            v-model="form.identifier"
-            type="text"
-            autocomplete="username"
-            required
-            class="w-full px-3 py-2 border border-input rounded-md bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            placeholder="admin"
-          />
-        </div>
+          <div class="space-y-1">
+            <Label for="password">Password</Label>
+            <Input
+              id="password"
+              v-model="form.password"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
 
-        <div class="space-y-1">
-          <label class="text-sm font-medium text-foreground" for="password">Password</label>
-          <input
-            id="password"
-            v-model="form.password"
-            type="password"
-            autocomplete="current-password"
-            required
-            class="w-full px-3 py-2 border border-input rounded-md bg-background text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-          />
-        </div>
+          <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 
-        <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
-
-        <Button type="submit" :disabled="loading">
-          {{ loading ? 'Signing in...' : 'Sign in' }}
-        </Button>
-      </form>
-    </div>
+          <Button type="submit" :disabled="loading" class="w-full">
+            {{ loading ? 'Signing in...' : 'Sign in' }}
+          </Button>
+        </form>
+      </CardContent>
+    </Card>
   </div>
 </template>
 
 <script setup lang="ts">
-import {Button} from "~/components/ui/button";
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
 
 definePageMeta({
   layout: false,
