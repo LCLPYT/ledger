@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Sonner } from '@/components/ui/sonner'
-useColorMode()
+const colorMode = useColorMode()
+const theme = computed(() => colorMode.state.value)
 </script>
 
 <template>
@@ -8,5 +9,5 @@ useColorMode()
   <NuxtLayout>
     <NuxtPage />
   </NuxtLayout>
-  <Sonner position="bottom-right" />
+  <Sonner rich-colors :theme="theme" position="bottom-right" />
 </template>
