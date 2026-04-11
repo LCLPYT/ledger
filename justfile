@@ -29,3 +29,8 @@ test filter="":
 
 build:
     go build -ldflags "-s -w" .
+
+[working-directory: 'front']
+front:
+    npm install
+    npm run dev

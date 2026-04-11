@@ -1,5 +1,5 @@
 # ledger
-A service to manage unlockables, stats, digital currencies and other things for games.
+A service to manage unlockable items, game statistics, digital currencies and other things. 
 
 This project features:
 - a lightweight backend server written in Go
@@ -12,12 +12,13 @@ The backend implements Role-based-authentication for users.
 API auth is handled via access tokens with granular permissions / scopes.
 For the web dashboard, short-lived stateless session tokens are used.
 
-## Setup
+## Backend service
 ### Prerequisites
+- [Go](https://go.dev/)
 - [Docker](https://www.docker.com/) or [Podman](https://podman.io/) for running containers
 - [Just](https://github.com/casey/just) to run saved commands easily
 
-### Running locally
+### One time setup
 First, run first time setup:
 ```bash
 # initialize default roles
@@ -25,6 +26,27 @@ just init_roles
 
 # create test user (make it admin for testing when prompted)
 just create_user
+```
+
+### Running
+```bash
+just serve
+```
+
+### Executing tests
+```bash
+just test
+```
+
+## Web dashboard
+### Prerequisites
+- [Node.js](https://nodejs.org)
+- [NPM](https://www.npmjs.com/)
+- [Just](https://github.com/casey/just) to run saved commands easily
+
+### Running
+```bash
+just front
 ```
 
 ## Contributing - AI policy
