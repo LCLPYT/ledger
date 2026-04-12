@@ -1,0 +1,10 @@
+ALTER TABLE users ADD COLUMN verified_at TIMESTAMP NULL DEFAULT NULL;
+
+CREATE TABLE user_invitations (
+    id         BIGSERIAL PRIMARY KEY,
+    user_id    BIGINT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token      TEXT NOT NULL UNIQUE,
+    created_at TIMESTAMP NOT NULL DEFAULT now(),
+    expires_at TIMESTAMP NOT NULL,
+    used_at    TIMESTAMP NULL DEFAULT NULL
+);

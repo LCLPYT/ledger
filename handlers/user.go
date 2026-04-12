@@ -28,7 +28,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 		var userID int64
 		var passwordHash []byte
 		err := db.QueryRow(
-			"SELECT id, password_hash FROM users WHERE username = $1 OR email = $1",
+			"SELECT id, password_hash FROM users WHERE (username = $1 OR email = $1) AND verified_at IS NOT NULL",
 			req.Identifier,
 		).Scan(&userID, &passwordHash)
 
