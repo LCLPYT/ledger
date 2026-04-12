@@ -144,6 +144,51 @@ paths:
           $ref: "#/components/responses/Unauthorized"
         "403":
           $ref: "#/components/responses/Forbidden"
+    post:
+      summary: Invite a new user (admin)
+      description: Creates a shell user and sends a verification email with a link to set their password.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateUserRequest"
+      responses:
+        "201":
+          description: User created and invite email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/User"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/auth/set-password:
+    post:
+      summary: Set password via invitation token
+      description: Validates the invitation token and sets the user's password, activating the account.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SetPasswordRequest"
+      responses:
+        "200":
+          description: Password set, account activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Message"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /api/v1/roles:
     get:
@@ -459,6 +504,31 @@ components:
         created:
           type: string
           format: date-time
+
+    CreateUserRequest:
+      type: object
+      required: [username, email]
+      properties:
+        username:
+          type: string
+          example: jsmith
+        email:
+          type: string
+          format: email
+          example: j@example.com
+
+    SetPasswordRequest:
+      type: object
+      required: [token, password]
+      properties:
+        token:
+          type: string
+          example: a3f2...
+        password:
+          type: string
+          format: password
+          minLength: 8
+          example: hunter2hunter2
 
     CreateRoleRequest:
       type: object

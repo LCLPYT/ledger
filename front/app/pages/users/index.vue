@@ -1,6 +1,9 @@
 <template>
   <div class="p-4 md:p-8 space-y-6">
-    <h2 class="text-2xl font-semibold text-foreground">Users</h2>
+    <div class="flex items-center justify-between">
+      <h2 class="text-2xl font-semibold text-foreground">Users</h2>
+      <Button @click="openInviteDialog">New user</Button>
+    </div>
 
     <!-- Error state -->
     <p v-if="fetchError" class="text-sm text-destructive">{{ fetchError }}</p>
@@ -55,6 +58,37 @@
       </div>
     </template>
 
+    <!-- Invite user dialog -->
+    <Dialog :open="inviteDialog.open" @update:open="inviteDialog.open = $event">
+      <DialogContent class="w-80">
+        <DialogHeader>
+          <DialogTitle>Invite new user</DialogTitle>
+        </DialogHeader>
+
+        <div class="space-y-4">
+          <div class="space-y-1">
+            <Label for="inv-username">Username</Label>
+            <Input id="inv-username" v-model="inviteDialog.username" placeholder="jsmith" />
+          </div>
+          <div class="space-y-1">
+            <Label for="inv-email">Email</Label>
+            <Input id="inv-email" v-model="inviteDialog.email" type="email" placeholder="j@example.com" />
+          </div>
+          <p v-if="inviteDialog.error" class="text-sm text-destructive">{{ inviteDialog.error }}</p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="inviteDialog.open = false">Cancel</Button>
+          <Button
+            :disabled="!inviteDialog.username.trim() || !inviteDialog.email.trim() || inviteDialog.loading"
+            @click="createUser"
+          >
+            {{ inviteDialog.loading ? 'Sending…' : 'Send invite' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
     <!-- Assign role dialog -->
     <Dialog :open="dialog.open" @update:open="dialog.open = $event">
       <DialogContent class="w-80">
@@ -101,6 +135,7 @@ import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { toast } from 'vue-sonner'
 
@@ -157,6 +192,42 @@ function availableRoles(userId: number) {
 
 function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString()
+}
+
+const inviteDialog = reactive({
+  open: false,
+  username: '',
+  email: '',
+  loading: false,
+  error: '',
+})
+
+function openInviteDialog() {
+  inviteDialog.username = ''
+  inviteDialog.email = ''
+  inviteDialog.error = ''
+  inviteDialog.open = true
+}
+
+async function createUser() {
+  inviteDialog.loading = true
+  inviteDialog.error = ''
+  const { email: invEmail } = inviteDialog
+  try {
+    await apiFetch('/api/v1/users', {
+      method: 'POST',
+      body: { username: inviteDialog.username.trim(), email: inviteDialog.email.trim() },
+    })
+    inviteDialog.open = false
+    await load()
+    toast.success(`Invite sent to ${invEmail}`)
+  } catch (e: unknown) {
+    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to create user'
+    inviteDialog.error = msg
+    toast.error(msg)
+  } finally {
+    inviteDialog.loading = false
+  }
 }
 
 const dialog = reactive({

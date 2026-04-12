@@ -21,6 +21,16 @@ type TokenRequest struct {
 	Expiry time.Time `json:"expiry"`
 }
 
+type CreateUserRequest struct {
+	Username string `json:"username" binding:"required"`
+	Email    string `json:"email"    binding:"required,email"`
+}
+
+type SetPasswordRequest struct {
+	Token    string `json:"token"    binding:"required"`
+	Password string `json:"password" binding:"required,min=8"`
+}
+
 type AccessToken struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`
