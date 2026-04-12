@@ -65,7 +65,7 @@ func runCreateUser() {
 
 	var id int64
 	err = database.QueryRow(
-		"INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id",
+		"INSERT INTO users (username, email, password_hash, verified_at) VALUES ($1, $2, $3, now()) RETURNING id",
 		username, email, hash,
 	).Scan(&id)
 	if err != nil {
