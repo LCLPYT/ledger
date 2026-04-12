@@ -55,13 +55,39 @@ func mustCreateUser(t *testing.T, username, email, password string) int64 {
 	}
 	var id int64
 	err = testDB.QueryRow(
-		"INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id",
+		"INSERT INTO users (username, email, password_hash, verified_at) VALUES ($1, $2, $3, now()) RETURNING id",
 		username, email, hash,
 	).Scan(&id)
 	if err != nil {
 		t.Fatalf("mustCreateUser insert: %v", err)
 	}
 	return id
+}
+
+// mustCreateShellUser inserts a user without a password or verified_at,
+// as created by the invitation flow before the user sets their password.
+func mustCreateShellUser(t *testing.T, username, email string) int64 {
+	t.Helper()
+	var id int64
+	err := testDB.QueryRow(
+		"INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id",
+		username, email,
+	).Scan(&id)
+	if err != nil {
+		t.Fatalf("mustCreateShellUser: %v", err)
+	}
+	return id
+}
+
+func mustCreateInvitation(t *testing.T, userID int64, token string, expiresAt time.Time) {
+	t.Helper()
+	_, err := testDB.Exec(
+		"INSERT INTO user_invitations (user_id, token, expires_at) VALUES ($1, $2, $3)",
+		userID, token, expiresAt,
+	)
+	if err != nil {
+		t.Fatalf("mustCreateInvitation: %v", err)
+	}
 }
 
 func mustAddPermission(t *testing.T, userID int64, permission string) {
