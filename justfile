@@ -1,8 +1,17 @@
 export DATABASE_URL := "postgres://db:db@localhost:5432/db?sslmode=disable"
 export JWT_SECRET := "dev-secret"
+export SMTP_HOST := "localhost"
+export SMTP_PORT := "1025"
+export SMTP_USER := ""
+export SMTP_PASS := ""
+export SMTP_FROM := "noreply@ledger.example.com"
+export APP_URL := "http://localhost:3000"
 
 db:
     docker compose up postgres -d --wait
+
+mailpit:
+    docker compose up mailpit -d --wait
 
 stop_db:
     docker compose down postgres
@@ -10,7 +19,7 @@ stop_db:
 delete_db: stop_db
     docker volume rm ledger_pgdata || true
 
-serve: db
+serve: db mailpit
     go run .
 
 psql: db

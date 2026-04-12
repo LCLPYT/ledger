@@ -18,6 +18,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	casbinlog "github.com/casbin/casbin/v2/log"
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgerrcode"
 	"github.com/lib/pq"
 )
 
@@ -240,7 +241,7 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 			req.Username, req.Email,
 		).Scan(&user.ID, &user.Username, &user.Email, &user.Created)
 		if err != nil {
-			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+			if pqErr, ok := errors.AsType[*pq.Error](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
 				c.JSON(http.StatusConflict, gin.H{"error": "username or email already exists"})
 				return
 			}
