@@ -32,6 +32,7 @@ init_roles: db
     go run cmd/init_roles/main.go
 
 [env("DATABASE_URL", "postgres://db:db@localhost:5433/db?sslmode=disable")]
+[env("SMTP_HOST", "")]
 test filter="":
     docker compose down postgres_test
     docker volume rm ledger_pgdata_test || true
