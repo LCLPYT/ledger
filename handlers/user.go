@@ -1,10 +1,13 @@
 package handlers
 
 import (
+	"crypto/rand"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"ledger/auth"
+	"ledger/email"
 	"ledger/models"
 	"ledger/util"
 	"net/http"
@@ -15,6 +18,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	casbinlog "github.com/casbin/casbin/v2/log"
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 )
 
 func Login(db *sql.DB) gin.HandlerFunc {
@@ -219,5 +223,111 @@ func GetUser(db *sql.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, user)
+	}
+}
+
+func CreateUser(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req models.CreateUserRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+
+		var user models.User
+		err := db.QueryRow(
+			"INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id, username, email, created_at",
+			req.Username, req.Email,
+		).Scan(&user.ID, &user.Username, &user.Email, &user.Created)
+		if err != nil {
+			if pqErr, ok := err.(*pq.Error); ok && pqErr.Code == "23505" {
+				c.JSON(http.StatusConflict, gin.H{"error": "username or email already exists"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		raw := make([]byte, 32)
+		if _, err := rand.Read(raw); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
+			return
+		}
+		token := hex.EncodeToString(raw)
+
+		_, err = db.Exec(
+			"INSERT INTO user_invitations (user_id, token, expires_at) VALUES ($1, $2, now() + interval '24 hours')",
+			user.ID, token,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if err := email.SendVerificationEmail(user.Email, user.Username, token); err != nil {
+			c.JSON(http.StatusCreated, gin.H{
+				"user":    user,
+				"warning": "user created but verification email could not be sent",
+			})
+			return
+		}
+
+		c.JSON(http.StatusCreated, user)
+	}
+}
+
+func SetPassword(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req models.SetPasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+
+		var invID, userID int64
+		err := db.QueryRow(
+			"SELECT id, user_id FROM user_invitations WHERE token = $1 AND expires_at > now() AND used_at IS NULL",
+			req.Token,
+		).Scan(&invID, &userID)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired token"})
+			return
+		}
+
+		hash, err := util.HashPassword([]byte(req.Password))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "password hashing failed"})
+			return
+		}
+
+		tx, err := db.Begin()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		defer func() { _ = tx.Rollback() }()
+
+		if _, err = tx.Exec(
+			"UPDATE users SET password_hash = $1, verified_at = now() WHERE id = $2",
+			hash, userID,
+		); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if _, err = tx.Exec(
+			"UPDATE user_invitations SET used_at = now() WHERE id = $1",
+			invID,
+		); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "password set, account activated"})
 	}
 }
