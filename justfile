@@ -46,7 +46,17 @@ test filter="":
 build:
     go build -ldflags "-s -w" .
 
+audit_go:
+    go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+[working-directory: 'front']
+audit_npm:
+    npm audit
+
 [working-directory: 'front']
 front:
     npm install
     npm run dev
+
+[parallel]
+audit: audit_go audit_npm
