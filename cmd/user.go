@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"bufio"
@@ -15,7 +15,22 @@ import (
 	"golang.org/x/term"
 )
 
-func main() {
+func RunUser(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Usage:")
+		fmt.Fprintln(os.Stderr, "  ledger user create  Create a new user interactively")
+		os.Exit(1)
+	}
+	switch args[0] {
+	case "create":
+		runCreateUser()
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown user command: %s\n", args[0])
+		os.Exit(1)
+	}
+}
+
+func runCreateUser() {
 	dsn := os.Getenv("DATABASE_URL")
 	database := db.InitDB(dsn)
 	defer database.Close()
@@ -53,7 +68,6 @@ func main() {
 		"INSERT INTO users (username, email, password_hash) VALUES ($1, $2, $3) RETURNING id",
 		username, email, hash,
 	).Scan(&id)
-
 	if err != nil {
 		log.Fatal(err)
 	}
