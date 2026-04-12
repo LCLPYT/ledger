@@ -295,6 +295,11 @@ func SetPassword(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
+		if err := util.ValidatePassword(req.Password); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
 		hash, err := util.HashPassword([]byte(req.Password))
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "password hashing failed"})
