@@ -32,5 +32,6 @@ jobs:
         with:
           node-version: 24
           cache: npm
+          cache-dependency-path: front/package-lock.json
       - run: npm ci
       - run: npm run build

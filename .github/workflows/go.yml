@@ -30,7 +30,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: '1.26.2'
-      - name: Install dependencies
-        run: go get .
-      - name: Test with Go
-        run: go test -json > test_results.json
+      - name: Install just
+        run: curl --proto '=https' --tlsv1.2 -sSf https://just.systems/install.sh | bash -s -- --to /usr/local/bin
+      - name: Run tests
+        run: just test
