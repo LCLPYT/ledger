@@ -31,14 +31,12 @@ create_user: db
 init_roles: db
     go run cmd/init_roles/main.go
 
-[env("DATABASE_URL", "postgres://db:db@localhost:5433/db?sslmode=disable")]
-[env("SMTP_HOST", "")]
 test filter="":
     docker compose down postgres_test
     docker volume rm ledger_pgdata_test || true
     docker compose up postgres_test -d --wait
 
-    go test ./handlers/... -v {{ if filter != "" { "-run " + filter } else { "" } }}
+    DATABASE_URL="postgres://db:db@localhost:5433/db?sslmode=disable" SMTP_HOST="" go test ./handlers/... -v {{ if filter != "" { "-run " + filter } else { "" } }}
 
     docker compose down postgres_test || true
     docker volume rm ledger_pgdata_test || true
