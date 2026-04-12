@@ -64,6 +64,8 @@ Casbin policies are stored in the database (not files).
 
 Migrations live in `migrations/` and run automatically on server startup.
 
+> **Keep `routes/openapi.yaml` in sync** when adding or changing routes. Update paths, request bodies, response schemas, and any new component schemas.
+
 ### Package layout
 
 | Package | Role |
