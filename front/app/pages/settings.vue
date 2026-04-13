@@ -1,25 +1,34 @@
 <template>
-  <div class="min-h-screen flex items-center justify-center bg-background">
-    <Card class="w-full max-w-sm">
+  <div class="p-6 max-w-md">
+    <h2 class="text-xl font-semibold mb-6">Settings</h2>
+
+    <Card>
       <CardHeader>
-        <CardTitle>Set your password</CardTitle>
-        <CardDescription>Choose a password to activate your account.</CardDescription>
+        <CardTitle>Change password</CardTitle>
+        <CardDescription>You will be signed out after changing your password.</CardDescription>
       </CardHeader>
       <CardContent>
-        <p v-if="!token" class="text-sm text-destructive">
-          Invalid or missing invitation token. Please use the link from your email.
-        </p>
-
-        <p v-else-if="success" class="text-sm text-green-600">
-          Account activated! Redirecting to login…
+        <p v-if="success" class="text-sm text-green-600">
+          Password changed. Signing out…
         </p>
 
         <form v-else class="space-y-4" @submit.prevent="handleSubmit">
           <div class="space-y-1">
-            <Label for="password">Password</Label>
+            <Label for="current">Current password</Label>
             <Input
-              id="password"
-              v-model="form.password"
+              id="current"
+              v-model="form.current"
+              type="password"
+              autocomplete="current-password"
+              required
+            />
+          </div>
+
+          <div class="space-y-1">
+            <Label for="new">New password</Label>
+            <Input
+              id="new"
+              v-model="form.newPassword"
               type="password"
               autocomplete="new-password"
               required
@@ -27,7 +36,7 @@
           </div>
 
           <div class="space-y-1">
-            <Label for="confirm">Confirm password</Label>
+            <Label for="confirm">Confirm new password</Label>
             <Input
               id="confirm"
               v-model="form.confirm"
@@ -40,7 +49,7 @@
           <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
 
           <Button type="submit" :disabled="loading" class="w-full">
-            {{ loading ? 'Activating…' : 'Activate account' }}
+            {{ loading ? 'Saving…' : 'Change password' }}
           </Button>
         </form>
       </CardContent>
@@ -55,16 +64,12 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 
 definePageMeta({
-  layout: false,
-  middleware: ['not-auth'],
+  middleware: ['auth'],
 })
 
-const config = useRuntimeConfig()
-const route = useRoute()
+const { changePassword, logout } = useAuth()
 
-const token = computed(() => route.query.token as string | undefined)
-
-const form = reactive({ password: '', confirm: '' })
+const form = reactive({ current: '', newPassword: '', confirm: '' })
 const error = ref('')
 const loading = ref(false)
 const success = ref(false)
@@ -81,11 +86,11 @@ function validatePassword(pw: string): string {
 async function handleSubmit() {
   error.value = ''
 
-  if (form.password !== form.confirm) {
+  if (form.newPassword !== form.confirm) {
     error.value = 'Passwords do not match.'
     return
   }
-  const policyError = validatePassword(form.password)
+  const policyError = validatePassword(form.newPassword)
   if (policyError) {
     error.value = policyError
     return
@@ -93,16 +98,12 @@ async function handleSubmit() {
 
   loading.value = true
   try {
-    await $fetch('/api/v1/auth/verify-invitation', {
-      baseURL: config.public.apiBase,
-      method: 'POST',
-      body: { token: token.value, password: form.password },
-    })
+    await changePassword(form.current, form.newPassword)
     success.value = true
     await new Promise(r => setTimeout(r, 1200))
-    await navigateTo('/login')
+    await logout()
   } catch (e: unknown) {
-    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Activation failed. The link may have expired.'
+    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to change password.'
     error.value = msg
   } finally {
     loading.value = false

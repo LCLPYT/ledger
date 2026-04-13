@@ -89,5 +89,12 @@ export const useAuth = () => {
     }
   }
 
-  return { token, user, login, logout, fetchUser, apiFetch, refreshIfNeeded }
+  async function changePassword(currentPassword: string, newPassword: string) {
+    await apiFetch('/api/v1/user/password', {
+      method: 'PUT',
+      body: { current_password: currentPassword, new_password: newPassword },
+    })
+  }
+
+  return { token, user, login, logout, fetchUser, apiFetch, refreshIfNeeded, changePassword }
 }
