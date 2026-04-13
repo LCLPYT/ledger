@@ -2,7 +2,7 @@
   <div class="p-4 md:p-8 space-y-6">
     <div class="flex items-center justify-between">
       <h2 class="text-2xl font-semibold text-foreground">Users</h2>
-      <Button @click="openInviteDialog">New user</Button>
+      <Button v-if="hasPermission('users.create')" @click="openInviteDialog">New user</Button>
     </div>
 
     <!-- Error state -->
@@ -143,7 +143,7 @@ definePageMeta({
   middleware: ['auth'],
 })
 
-const { apiFetch } = useAuth()
+const { apiFetch, hasPermission } = useAuth()
 
 interface User {
   id: number
