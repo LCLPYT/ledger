@@ -56,7 +56,7 @@ import { Button } from '@/components/ui/button'
 
 definePageMeta({
   layout: false,
-  middleware: [],
+  middleware: ['not-auth'],
 })
 
 const config = useRuntimeConfig()
