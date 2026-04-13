@@ -244,7 +244,7 @@ func GetUser(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateUser(db *sql.DB) gin.HandlerFunc {
+func CreateUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.CreateUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -263,6 +263,12 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 				return
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		uid := strconv.FormatInt(user.ID, 10)
+		if _, err := enforcer.AddGroupingPolicy(uid, "default"); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "permission error"})
 			return
 		}
 

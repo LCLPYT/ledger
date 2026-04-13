@@ -48,7 +48,7 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 
 	users := v1.Group("/users")
 	users.GET("", middleware.AuthRequired(enforcer, db, perms.UsersRead), handlers.ListUsers(db))
-	users.POST("", middleware.AuthRequired(enforcer, db, perms.UsersCreate), handlers.CreateUser(db))
+	users.POST("", middleware.AuthRequired(enforcer, db, perms.UsersCreate), handlers.CreateUser(db, enforcer))
 
 	v1.POST("/auth/verify-invitation", middleware.NotAuthenticated, handlers.VerifyInvitation(db))
 
