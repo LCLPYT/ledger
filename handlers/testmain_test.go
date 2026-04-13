@@ -32,11 +32,20 @@ func TestMain(m *testing.M) {
 
 func cleanDB(t *testing.T) {
 	t.Helper()
-	_, err := testDB.Exec("TRUNCATE access_tokens, users, roles RESTART IDENTITY CASCADE")
+	_, err := testDB.Exec("TRUNCATE access_tokens, sessions, users, roles RESTART IDENTITY CASCADE")
 	if err != nil {
 		t.Fatalf("cleanDB: %v", err)
 	}
 	testEnforcer.ClearPolicy()
+}
+
+func mustCreateSession(t *testing.T, userID int64) string {
+	t.Helper()
+	token, err := auth.GenerateSessionToken(strconv.FormatInt(userID, 10), testDB)
+	if err != nil {
+		t.Fatalf("mustCreateSession: %v", err)
+	}
+	return token
 }
 
 func mustCreateRole(t *testing.T, name string) {

@@ -22,7 +22,7 @@ import (
 func refreshSessionRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/user/session/refresh", middleware.SessionRequired, handlers.RefreshSession())
+	r.POST("/api/v1/user/session/refresh", middleware.SessionRequired(testDB), handlers.RefreshSession(testDB))
 	return r
 }
 

@@ -25,10 +25,17 @@ func createUserRouter() *gin.Engine {
 	return r
 }
 
-func setPasswordRouter() *gin.Engine {
+func verifyInvitationRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/auth/set-password", handlers.SetPassword(testDB))
+	r.POST("/api/v1/auth/verify-invitation", handlers.VerifyInvitation(testDB))
+	return r
+}
+
+func changePasswordRouter() *gin.Engine {
+	gin.SetMode(gin.TestMode)
+	r := gin.New()
+	r.PUT("/api/v1/user/password", middleware.SessionRequired(testDB), handlers.ChangePassword(testDB))
 	return r
 }
 
@@ -147,16 +154,16 @@ func TestCreateUser_MissingFields(t *testing.T) {
 	}
 }
 
-// --- SetPassword ---
+// --- VerifyInvitation ---
 
-func TestSetPassword_Success(t *testing.T) {
+func TestVerifyInvitation_Success(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateShellUser(t, "newuser", "new@example.com")
 	mustCreateInvitation(t, userID, "validtok", time.Now().Add(24*time.Hour))
 
 	w := httptest.NewRecorder()
-	setPasswordRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/auth/set-password", "",
+	verifyInvitationRouter().ServeHTTP(w, authedRequest(
+		http.MethodPost, "/api/v1/auth/verify-invitation", "",
 		`{"token":"validtok","password":"`+strongPassword+`"}`,
 	))
 
@@ -177,14 +184,14 @@ func TestSetPassword_Success(t *testing.T) {
 	assert.NotNil(t, usedAt)
 }
 
-func TestSetPassword_AllowsLogin(t *testing.T) {
+func TestVerifyInvitation_AllowsLogin(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateShellUser(t, "newuser", "new@example.com")
 	mustCreateInvitation(t, userID, "tok", time.Now().Add(24*time.Hour))
 
 	w := httptest.NewRecorder()
-	setPasswordRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/auth/set-password", "",
+	verifyInvitationRouter().ServeHTTP(w, authedRequest(
+		http.MethodPost, "/api/v1/auth/verify-invitation", "",
 		`{"token":"tok","password":"`+strongPassword+`"}`,
 	))
 	require.Equal(t, http.StatusOK, w.Code)
@@ -197,19 +204,19 @@ func TestSetPassword_AllowsLogin(t *testing.T) {
 	assert.NotEmpty(t, resp["token"])
 }
 
-func TestSetPassword_InvalidToken(t *testing.T) {
+func TestVerifyInvitation_InvalidToken(t *testing.T) {
 	cleanDB(t)
 
 	w := httptest.NewRecorder()
-	setPasswordRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/auth/set-password", "",
+	verifyInvitationRouter().ServeHTTP(w, authedRequest(
+		http.MethodPost, "/api/v1/auth/verify-invitation", "",
 		`{"token":"doesnotexist","password":"`+strongPassword+`"}`,
 	))
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestSetPassword_ExpiredToken(t *testing.T) {
+func TestVerifyInvitation_ExpiredToken(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateShellUser(t, "newuser", "new@example.com")
 	// Use DB-side now() to avoid host↔container clock conversion issues.
@@ -220,37 +227,37 @@ func TestSetPassword_ExpiredToken(t *testing.T) {
 	require.NoError(t, err)
 
 	w := httptest.NewRecorder()
-	setPasswordRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/auth/set-password", "",
+	verifyInvitationRouter().ServeHTTP(w, authedRequest(
+		http.MethodPost, "/api/v1/auth/verify-invitation", "",
 		`{"token":"expiredtok","password":"`+strongPassword+`"}`,
 	))
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }
 
-func TestSetPassword_AlreadyUsed(t *testing.T) {
+func TestVerifyInvitation_AlreadyUsed(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateShellUser(t, "newuser", "new@example.com")
 	mustCreateInvitation(t, userID, "usedtok", time.Now().Add(24*time.Hour))
 
 	// First use — succeeds
 	w := httptest.NewRecorder()
-	setPasswordRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/auth/set-password", "",
+	verifyInvitationRouter().ServeHTTP(w, authedRequest(
+		http.MethodPost, "/api/v1/auth/verify-invitation", "",
 		`{"token":"usedtok","password":"`+strongPassword+`"}`,
 	))
 	require.Equal(t, http.StatusOK, w.Code)
 
 	// Second use — must fail
 	w2 := httptest.NewRecorder()
-	setPasswordRouter().ServeHTTP(w2, authedRequest(
-		http.MethodPost, "/api/v1/auth/set-password", "",
+	verifyInvitationRouter().ServeHTTP(w2, authedRequest(
+		http.MethodPost, "/api/v1/auth/verify-invitation", "",
 		`{"token":"usedtok","password":"Another!Strong1"}`,
 	))
 	assert.Equal(t, http.StatusBadRequest, w2.Code)
 }
 
-func TestSetPassword_WeakPassword(t *testing.T) {
+func TestVerifyInvitation_WeakPassword(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateShellUser(t, "newuser", "new@example.com")
 	mustCreateInvitation(t, userID, "tok", time.Now().Add(24*time.Hour))
@@ -269,8 +276,8 @@ func TestSetPassword_WeakPassword(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			setPasswordRouter().ServeHTTP(w, authedRequest(
-				http.MethodPost, "/api/v1/auth/set-password", "",
+			verifyInvitationRouter().ServeHTTP(w, authedRequest(
+				http.MethodPost, "/api/v1/auth/verify-invitation", "",
 				`{"token":"tok","password":"`+tc.password+`"}`,
 			))
 			assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -283,4 +290,129 @@ func TestSetPassword_WeakPassword(t *testing.T) {
 		"SELECT used_at FROM user_invitations WHERE token = 'tok'",
 	).Scan(&usedAt))
 	assert.Nil(t, usedAt)
+}
+
+// --- ChangePassword ---
+
+func TestChangePassword_Success(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "alice", "alice@example.com", strongPassword)
+	sessionToken := mustCreateSession(t, userID)
+
+	w := httptest.NewRecorder()
+	changePasswordRouter().ServeHTTP(w, authedRequest(
+		http.MethodPut, "/api/v1/user/password", sessionToken,
+		`{"current_password":"`+strongPassword+`","new_password":"NewP@ss1word"}`,
+	))
+
+	require.Equal(t, http.StatusOK, w.Code)
+	var resp map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+	assert.Equal(t, "password changed", resp["message"])
+}
+
+func TestChangePassword_AllowsLoginWithNew(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "alice", "alice@example.com", strongPassword)
+	sessionToken := mustCreateSession(t, userID)
+
+	w := httptest.NewRecorder()
+	changePasswordRouter().ServeHTTP(w, authedRequest(
+		http.MethodPut, "/api/v1/user/password", sessionToken,
+		`{"current_password":"`+strongPassword+`","new_password":"NewP@ss1word"}`,
+	))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	// Old password must no longer work
+	w2 := postLogin(loginRouter(), `{"identifier":"alice","password":"`+strongPassword+`"}`)
+	assert.Equal(t, http.StatusBadRequest, w2.Code)
+
+	// New password must work
+	w3 := postLogin(loginRouter(), `{"identifier":"alice","password":"NewP@ss1word"}`)
+	require.Equal(t, http.StatusOK, w3.Code)
+}
+
+func TestChangePassword_WrongCurrentPassword(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "alice", "alice@example.com", strongPassword)
+	sessionToken := mustCreateSession(t, userID)
+
+	w := httptest.NewRecorder()
+	changePasswordRouter().ServeHTTP(w, authedRequest(
+		http.MethodPut, "/api/v1/user/password", sessionToken,
+		`{"current_password":"Wr0ng!pass","new_password":"NewP@ss1word"}`,
+	))
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestChangePassword_WeakNewPassword(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "alice", "alice@example.com", strongPassword)
+	sessionToken := mustCreateSession(t, userID)
+
+	tests := []struct {
+		name     string
+		password string
+	}{
+		{"too short", "Ab1!"},
+		{"no uppercase", "newp@ss1word"},
+		{"no lowercase", "NEWP@SS1WORD"},
+		{"no digit", "NewP@ssword"},
+		{"no special", "NewPass1word"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			w := httptest.NewRecorder()
+			changePasswordRouter().ServeHTTP(w, authedRequest(
+				http.MethodPut, "/api/v1/user/password", sessionToken,
+				`{"current_password":"`+strongPassword+`","new_password":"`+tc.password+`"}`,
+			))
+			assert.Equal(t, http.StatusBadRequest, w.Code)
+		})
+	}
+}
+
+func TestChangePassword_RevokesOtherSessions(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "alice", "alice@example.com", strongPassword)
+	mustAddPermission(t, userID, perms.UserRead)
+
+	// Create two sessions
+	session1 := mustCreateSession(t, userID)
+	session2 := mustCreateSession(t, userID)
+
+	// Change password using session1
+	w := httptest.NewRecorder()
+	changePasswordRouter().ServeHTTP(w, authedRequest(
+		http.MethodPut, "/api/v1/user/password", session1,
+		`{"current_password":"`+strongPassword+`","new_password":"NewP@ss1word"}`,
+	))
+	require.Equal(t, http.StatusOK, w.Code)
+
+	// Both sessions must now be invalid
+	w2 := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w2, authedRequest(http.MethodGet, "/api/v1/user", session1, ""))
+	assert.Equal(t, http.StatusUnauthorized, w2.Code)
+
+	w3 := httptest.NewRecorder()
+	getUserRouter().ServeHTTP(w3, authedRequest(http.MethodGet, "/api/v1/user", session2, ""))
+	assert.Equal(t, http.StatusUnauthorized, w3.Code)
+}
+
+func TestChangePassword_RequiresSession(t *testing.T) {
+	cleanDB(t)
+	userID := mustCreateUser(t, "alice", "alice@example.com", strongPassword)
+	mustAddPermission(t, userID, perms.UserRead)
+	accessToken := mustCreateToken(t, userID, []string{"user.read"})
+
+	w := httptest.NewRecorder()
+	changePasswordRouter().ServeHTTP(w, authedRequest(
+		http.MethodPut, "/api/v1/user/password", accessToken,
+		`{"current_password":"`+strongPassword+`","new_password":"NewP@ss1word"}`,
+	))
+
+	// API tokens must be rejected — session required
+	assert.Equal(t, http.StatusForbidden, w.Code)
 }

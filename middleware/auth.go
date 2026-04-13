@@ -25,7 +25,7 @@ func AuthRequired(enforcer *casbin.Enforcer, db *sql.DB, requiredPermissions ...
 		}
 
 		if claims.Type == auth.TypeSession {
-			HandleSessionTokenAuth(c, requiredPermissions, enforcer)
+			HandleSessionTokenAuth(c, db, requiredPermissions, enforcer)
 			return
 		}
 
@@ -34,18 +34,30 @@ func AuthRequired(enforcer *casbin.Enforcer, db *sql.DB, requiredPermissions ...
 	}
 }
 
-func SessionRequired(c *gin.Context) {
-	claims, done := DecodeJwt(c)
-	if done {
-		return
-	}
+func SessionRequired(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		claims, done := DecodeJwt(c)
+		if done {
+			return
+		}
 
-	if claims.Type != auth.TypeSession {
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not in a session"})
-		return
-	}
+		if claims.Type != auth.TypeSession {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "not in a session"})
+			return
+		}
 
-	c.Next()
+		var exists int
+		err := db.QueryRow(
+			"SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2 AND expires_at > now()",
+			claims.RegisteredClaims.ID, claims.UserID,
+		).Scan(&exists)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired or revoked"})
+			return
+		}
+
+		c.Next()
+	}
 }
 
 func DecodeJwt(c *gin.Context) (*auth.Claims, bool) {
@@ -67,11 +79,23 @@ func DecodeJwt(c *gin.Context) (*auth.Claims, bool) {
 	}
 
 	c.Set("userID", claims.UserID)
+	c.Set("sessionID", claims.RegisteredClaims.ID)
 	return claims, false
 }
 
-func HandleSessionTokenAuth(c *gin.Context, requiredPermissions []string, enforcer *casbin.Enforcer) {
+func HandleSessionTokenAuth(c *gin.Context, db *sql.DB, requiredPermissions []string, enforcer *casbin.Enforcer) {
 	userID := c.GetString("userID")
+	sessionID := c.GetString("sessionID")
+
+	var exists int
+	err := db.QueryRow(
+		"SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2 AND expires_at > now()",
+		sessionID, userID,
+	).Scan(&exists)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired or revoked"})
+		return
+	}
 
 	for _, permission := range requiredPermissions {
 		parts := strings.SplitN(permission, ".", 2)

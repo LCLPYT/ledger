@@ -26,9 +26,14 @@ type CreateUserRequest struct {
 	Email    string `json:"email"    binding:"required,email"`
 }
 
-type SetPasswordRequest struct {
+type VerifyInvitationRequest struct {
 	Token    string `json:"token"    binding:"required"`
 	Password string `json:"password" binding:"required,min=8"`
+}
+
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" binding:"required"`
+	NewPassword     string `json:"new_password"     binding:"required"`
 }
 
 type AccessToken struct {
