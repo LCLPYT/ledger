@@ -55,7 +55,7 @@
                     variant="ghost"
                     size="sm"
                     class="text-destructive hover:text-destructive"
-                    @click="deleteUser(u)"
+                    @click="openDeleteDialog(u)"
                   >Delete</Button>
                 </div>
               </TableCell>
@@ -132,6 +132,33 @@
           <Button variant="outline" @click="dialog.open = false">Cancel</Button>
           <Button :disabled="!dialog.selectedRole || dialog.loading" @click="assignRole">
             {{ dialog.loading ? 'Assigning…' : 'Assign' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Delete user confirmation dialog -->
+    <Dialog :open="deleteDialog.open" @update:open="deleteDialog.open = $event">
+      <DialogContent class="w-80">
+        <DialogHeader>
+          <DialogTitle>Delete user</DialogTitle>
+        </DialogHeader>
+
+        <p class="text-sm text-muted-foreground">
+          Are you sure you want to delete <span class="font-medium text-foreground">{{ deleteDialog.user?.username }}</span>?
+          This will remove their account, tokens, and sessions permanently.
+        </p>
+
+        <p v-if="deleteDialog.error" class="text-sm text-destructive">{{ deleteDialog.error }}</p>
+
+        <DialogFooter>
+          <Button variant="outline" @click="deleteDialog.open = false">Cancel</Button>
+          <Button
+            variant="destructive"
+            :disabled="deleteDialog.loading"
+            @click="confirmDeleteUser"
+          >
+            {{ deleteDialog.loading ? 'Deleting…' : 'Delete' }}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -292,14 +319,34 @@ async function removeRole(userId: number, roleName: string) {
   }
 }
 
-async function deleteUser(u: User) {
+const deleteDialog = reactive({
+  open: false,
+  user: null as User | null,
+  loading: false,
+  error: '',
+})
+
+function openDeleteDialog(u: User) {
+  deleteDialog.user = u
+  deleteDialog.error = ''
+  deleteDialog.open = true
+}
+
+async function confirmDeleteUser() {
+  if (!deleteDialog.user) return
+  deleteDialog.loading = true
+  deleteDialog.error = ''
+  const { user: target } = deleteDialog
   try {
-    await apiFetch(`/api/v1/users/${u.id}`, { method: 'DELETE' })
+    await apiFetch(`/api/v1/users/${target.id}`, { method: 'DELETE' })
+    deleteDialog.open = false
     await load()
-    toast.success(`User "${u.username}" deleted`)
+    toast.success(`User "${target.username}" deleted`)
   } catch (e: unknown) {
     const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to delete user'
-    toast.error(msg)
+    deleteDialog.error = msg
+  } finally {
+    deleteDialog.loading = false
   }
 }
 </script>

@@ -62,7 +62,7 @@
                     :disabled="r.protected"
                     :title="r.protected ? 'Protected roles cannot be deleted' : undefined"
                     class="text-destructive hover:text-destructive"
-                    @click="deleteRole(r)"
+                    @click="openDeleteDialog(r)"
                   >
                     Delete
                   </Button>
@@ -130,6 +130,33 @@
 
         <DialogFooter>
           <Button @click="permDialog.open = false">Done</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Delete role confirmation dialog -->
+    <Dialog :open="deleteDialog.open" @update:open="deleteDialog.open = $event">
+      <DialogContent class="w-80">
+        <DialogHeader>
+          <DialogTitle>Delete role</DialogTitle>
+        </DialogHeader>
+
+        <p class="text-sm text-muted-foreground">
+          Are you sure you want to delete the role <span class="font-medium text-foreground">{{ deleteDialog.role?.name }}</span>?
+          All members will lose this role.
+        </p>
+
+        <p v-if="deleteDialog.error" class="text-sm text-destructive">{{ deleteDialog.error }}</p>
+
+        <DialogFooter>
+          <Button variant="outline" @click="deleteDialog.open = false">Cancel</Button>
+          <Button
+            variant="destructive"
+            :disabled="deleteDialog.loading"
+            @click="confirmDeleteRole"
+          >
+            {{ deleteDialog.loading ? 'Deleting…' : 'Delete' }}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -223,14 +250,34 @@ async function createRole() {
 }
 
 // Delete role
-async function deleteRole(r: Role) {
+const deleteDialog = reactive({
+  open: false,
+  role: null as Role | null,
+  loading: false,
+  error: '',
+})
+
+function openDeleteDialog(r: Role) {
+  deleteDialog.role = r
+  deleteDialog.error = ''
+  deleteDialog.open = true
+}
+
+async function confirmDeleteRole() {
+  if (!deleteDialog.role) return
+  deleteDialog.loading = true
+  deleteDialog.error = ''
+  const { role } = deleteDialog
   try {
-    await apiFetch(`/api/v1/roles/${r.name}`, { method: 'DELETE' })
+    await apiFetch(`/api/v1/roles/${role.name}`, { method: 'DELETE' })
+    deleteDialog.open = false
     await load()
-    toast.success(`Role "${r.name}" deleted`)
+    toast.success(`Role "${role.name}" deleted`)
   } catch (e: unknown) {
     const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to delete role'
-    toast.error(msg)
+    deleteDialog.error = msg
+  } finally {
+    deleteDialog.loading = false
   }
 }
 
