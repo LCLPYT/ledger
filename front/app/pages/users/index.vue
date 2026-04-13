@@ -36,6 +36,7 @@
                   >
                     {{ role }}
                     <button
+                      v-if="hasPermission('roles.manage_users')"
                       class="hover:text-destructive transition-colors"
                       title="Remove role"
                       @click="removeRole(u.id, role)"
@@ -47,7 +48,7 @@
                 </div>
               </TableCell>
               <TableCell class="text-right">
-                <Button variant="ghost" size="sm" @click="openAssignDialog(u)">Assign role</Button>
+                <Button v-if="hasPermission('roles.manage_users')" variant="ghost" size="sm" @click="openAssignDialog(u)">Assign role</Button>
               </TableCell>
             </TableRow>
             <TableRow v-if="users.length === 0">
