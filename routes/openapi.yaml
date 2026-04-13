@@ -448,6 +448,29 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/user/permissions:
+    get:
+      summary: Get the current user's effective permissions
+      security:
+        - bearerAuth: []
+      responses:
+        "200":
+          description: List of effective permission strings
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  permissions:
+                    type: array
+                    items:
+                      type: string
+                    example: ["user.read", "users.read", "roles.read"]
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
   /api/v1/user:
     get:
       summary: Get the authenticated user's profile

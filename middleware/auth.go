@@ -94,6 +94,7 @@ func DecodeJwt(c *gin.Context) (*auth.Claims, bool) {
 
 	c.Set("userID", claims.UserID)
 	c.Set("sessionID", claims.RegisteredClaims.ID)
+	c.Set("tokenType", claims.Type)
 	return claims, false
 }
 
@@ -172,5 +173,6 @@ func HandleAccessTokenAuth(
 		}
 	}
 
+	c.Set("tokenScopes", scopes)
 	c.Next()
 }

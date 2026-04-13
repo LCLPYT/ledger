@@ -43,6 +43,7 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	user.GET("/tokens", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.ListTokens(db))
 	user.DELETE("/tokens/:id", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.RevokeToken(db))
 	user.GET("", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUser(db))
+	user.GET("/permissions", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUserPermissions(enforcer))
 	user.PUT("/password", middleware.SessionRequired(db), handlers.ChangePassword(db))
 
 	users := v1.Group("/users")
