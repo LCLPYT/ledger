@@ -254,27 +254,6 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
-  /api/v1/permissions:
-    get:
-      summary: List all permissions defined in the system
-      responses:
-        "200":
-          description: List of permission strings
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  permissions:
-                    type: array
-                    items:
-                      type: string
-                    example: ["user.read", "user.create_token", "roles.create", "roles.read", "roles.manage_users"]
-        "401":
-          $ref: "#/components/responses/Unauthorized"
-        "403":
-          $ref: "#/components/responses/Forbidden"
-
   /api/v1/roles/{role}:
     delete:
       summary: Delete a role (protected roles cannot be deleted)

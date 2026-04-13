@@ -152,7 +152,7 @@ async function load() {
   try {
     const [t, p] = await Promise.all([
       apiFetch<AccessToken[]>('/api/v1/user/tokens'),
-      apiFetch<{ permissions: string[] }>('/api/v1/permissions'),
+      apiFetch<{ permissions: string[] }>('/api/v1/user/permissions'),
     ])
     tokens.value = t
     allPermissions.value = p.permissions
