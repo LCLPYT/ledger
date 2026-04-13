@@ -79,7 +79,7 @@ import { LayoutDashboard, Users, Shield, KeyRound, Settings, Menu } from 'lucide
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 
-const { user, logout, fetchUser } = useAuth()
+const { user, logout, fetchUser, fetchPermissions, hasPermission } = useAuth()
 const route = useRoute()
 
 const sidebarOpen = ref(false)
@@ -88,13 +88,18 @@ watch(route, () => {
   sidebarOpen.value = false
 })
 
-const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard },
-  { to: '/users', label: 'Users', icon: Users },
-  { to: '/roles', label: 'Roles', icon: Shield },
-  { to: '/tokens', label: 'Tokens', icon: KeyRound },
-  { to: '/settings', label: 'Settings', icon: Settings },
+const ALL_NAV_ITEMS = [
+  { to: '/',         label: 'Dashboard', icon: LayoutDashboard, permission: null },
+  { to: '/users',    label: 'Users',     icon: Users,           permission: 'users.read' },
+  { to: '/roles',    label: 'Roles',     icon: Shield,          permission: 'roles.read' },
+  { to: '/tokens',   label: 'Tokens',    icon: KeyRound,        permission: null },
+  { to: '/settings', label: 'Settings',  icon: Settings,        permission: null },
 ]
 
+const navItems = computed(() =>
+  ALL_NAV_ITEMS.filter(i => i.permission === null || hasPermission(i.permission))
+)
+
 await fetchUser()
+await fetchPermissions()
 </script>

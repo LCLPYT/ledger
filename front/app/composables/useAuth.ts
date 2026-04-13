@@ -27,6 +27,7 @@ export const useAuth = () => {
     maxAge: SESSION_MAX_AGE,
   })
   const user = useState<User | null>('auth:user', () => null)
+  const permissions = useState<string[] | null>('auth:permissions', () => null)
 
   const apiFetch = $fetch.create({
     baseURL: config.public.apiBase,
@@ -47,6 +48,7 @@ export const useAuth = () => {
     })
     token.value = res.token
     await fetchUser()
+    await fetchPermissions()
   }
 
   async function fetchUser() {
@@ -58,9 +60,25 @@ export const useAuth = () => {
     }
   }
 
+  async function fetchPermissions() {
+    if (!token.value) return
+    try {
+      const res = await apiFetch<{ permissions: string[] }>('/api/v1/user/permissions')
+      permissions.value = res.permissions
+    } catch {
+      permissions.value = []
+    }
+  }
+
+  function hasPermission(perm: string): boolean {
+    if (permissions.value === null) return false
+    return permissions.value.includes(perm)
+  }
+
   async function logout() {
     token.value = null
     user.value = null
+    permissions.value = null
     await navigateTo('/login')
   }
 
@@ -96,5 +114,5 @@ export const useAuth = () => {
     })
   }
 
-  return { token, user, login, logout, fetchUser, apiFetch, refreshIfNeeded, changePassword }
+  return { token, user, permissions, login, logout, fetchUser, fetchPermissions, hasPermission, apiFetch, refreshIfNeeded, changePassword }
 }
