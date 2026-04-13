@@ -416,3 +416,36 @@ func ChangePassword(db *sql.DB) gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"message": "password changed"})
 	}
 }
+
+func DeleteUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		targetID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+			return
+		}
+
+		if strconv.FormatInt(targetID, 10) == c.GetString("userID") {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "cannot delete your own account"})
+			return
+		}
+
+		if _, err := enforcer.DeleteUser(strconv.FormatInt(targetID, 10)); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "permission error"})
+			return
+		}
+
+		// FK CASCADE handles access_tokens, sessions, user_invitations
+		res, err := db.Exec("DELETE FROM users WHERE id = $1", targetID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		if n, _ := res.RowsAffected(); n == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		c.Status(http.StatusNoContent)
+	}
+}
