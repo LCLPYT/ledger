@@ -92,7 +92,7 @@ const ALL_NAV_ITEMS = [
   { to: '/',         label: 'Dashboard', icon: LayoutDashboard, permission: null },
   { to: '/users',    label: 'Users',     icon: Users,           permission: 'users.read' },
   { to: '/roles',    label: 'Roles',     icon: Shield,          permission: 'roles.read' },
-  { to: '/tokens',   label: 'Tokens',    icon: KeyRound,        permission: null },
+  { to: '/tokens',   label: 'Tokens',    icon: KeyRound,        permission: 'user.create_token' },
   { to: '/settings', label: 'Settings',  icon: Settings,        permission: null },
 ]
 
