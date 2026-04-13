@@ -55,6 +55,16 @@ func SessionRequired(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+func NotAuthenticated(c *gin.Context) {
+	authHeader := c.GetHeader("Authorization")
+	if authHeader != "" {
+		c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "only available when not authenticated"})
+		return
+	}
+
+	c.Next()
+}
+
 func sessionExists(db *sql.DB, sessionID, userID string) bool {
 	var exists int
 	err := db.QueryRow(

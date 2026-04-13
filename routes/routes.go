@@ -37,19 +37,19 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	v1 := r.Group("/api/v1")
 
 	user := v1.Group("/user")
-	user.POST("/login", handlers.Login(db))
+	user.POST("/login", middleware.NotAuthenticated, handlers.Login(db))
 	user.POST("/session/refresh", middleware.SessionRequired(db), handlers.RefreshSession(db))
 	user.POST("/token", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.CreateToken(db, enforcer))
 	user.GET("/tokens", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.ListTokens(db))
 	user.DELETE("/tokens/:id", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.RevokeToken(db))
 	user.GET("", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUser(db))
+	user.PUT("/password", middleware.SessionRequired(db), handlers.ChangePassword(db))
 
 	users := v1.Group("/users")
 	users.GET("", middleware.AuthRequired(enforcer, db, perms.UsersRead), handlers.ListUsers(db))
 	users.POST("", middleware.AuthRequired(enforcer, db, perms.UsersCreate), handlers.CreateUser(db))
 
-	v1.POST("/auth/verify-invitation", handlers.VerifyInvitation(db))
-	user.PUT("/password", middleware.SessionRequired(db), handlers.ChangePassword(db))
+	v1.POST("/auth/verify-invitation", middleware.NotAuthenticated, handlers.VerifyInvitation(db))
 
 	roles := v1.Group("/roles")
 	roles.GET("", middleware.AuthRequired(enforcer, db, perms.RolesRead), handlers.ListRoles(db, enforcer))
