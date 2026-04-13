@@ -49,8 +49,8 @@
                     v-if="hasPermission(Perms.RolesCreate)"
                     variant="ghost"
                     size="sm"
-                    :disabled="r.protected"
-                    :title="r.protected ? 'Protected roles cannot be edited' : undefined"
+                    :disabled="r.name === 'admin'"
+                    :title="r.name === 'admin' ? 'Admin role permissions cannot be edited' : undefined"
                     @click="openPermDialog(r)"
                   >
                     Permissions

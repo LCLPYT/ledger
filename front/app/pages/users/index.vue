@@ -36,7 +36,7 @@
                   >
                     {{ role }}
                     <button
-                      v-if="hasPermission(Perms.RolesManageUsers)"
+                      v-if="hasPermission(Perms.RolesManageUsers) && role !== 'default'"
                       class="hover:text-destructive transition-colors"
                       title="Remove role"
                       @click="removeRole(u.id, role)"
@@ -48,7 +48,16 @@
                 </div>
               </TableCell>
               <TableCell class="text-right">
-                <Button v-if="hasPermission(Perms.RolesManageUsers)" variant="ghost" size="sm" @click="openAssignDialog(u)">Assign role</Button>
+                <div class="flex items-center justify-end gap-2">
+                  <Button v-if="hasPermission(Perms.RolesManageUsers)" variant="ghost" size="sm" @click="openAssignDialog(u)">Assign role</Button>
+                  <Button
+                    v-if="hasPermission(Perms.UsersCreate) && u.id !== user?.id"
+                    variant="ghost"
+                    size="sm"
+                    class="text-destructive hover:text-destructive"
+                    @click="deleteUser(u)"
+                  >Delete</Button>
+                </div>
               </TableCell>
             </TableRow>
             <TableRow v-if="users.length === 0">
@@ -144,7 +153,7 @@ definePageMeta({
   middleware: ['auth'],
 })
 
-const { apiFetch, hasPermission } = useAuth()
+const { apiFetch, hasPermission, user } = useAuth()
 
 interface User {
   id: number
@@ -279,6 +288,17 @@ async function removeRole(userId: number, roleName: string) {
     toast.success(`Role "${roleName}" removed from ${user?.username ?? 'user'}`)
   } catch (e: unknown) {
     const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to remove role'
+    toast.error(msg)
+  }
+}
+
+async function deleteUser(u: User) {
+  try {
+    await apiFetch(`/api/v1/users/${u.id}`, { method: 'DELETE' })
+    await load()
+    toast.success(`User "${u.username}" deleted`)
+  } catch (e: unknown) {
+    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to delete user'
     toast.error(msg)
   }
 }
