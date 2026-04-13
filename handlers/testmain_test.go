@@ -22,6 +22,11 @@ var (
 
 func TestMain(m *testing.M) {
 	dsn := os.Getenv("DATABASE_URL")
+
+	if dsn == "" {
+		dsn = "postgres://db:db@localhost:5433/db?sslmode=disable"
+	}
+
 	testDB = appdb.InitDB(dsn)
 	testEnforcer = appdb.InitCasbin(dsn)
 
@@ -32,11 +37,20 @@ func TestMain(m *testing.M) {
 
 func cleanDB(t *testing.T) {
 	t.Helper()
-	_, err := testDB.Exec("TRUNCATE access_tokens, users, roles RESTART IDENTITY CASCADE")
+	_, err := testDB.Exec("TRUNCATE access_tokens, sessions, users, user_invitations, roles RESTART IDENTITY CASCADE")
 	if err != nil {
 		t.Fatalf("cleanDB: %v", err)
 	}
 	testEnforcer.ClearPolicy()
+}
+
+func mustCreateSession(t *testing.T, userID int64) string {
+	t.Helper()
+	token, err := auth.GenerateSessionToken(strconv.FormatInt(userID, 10), testDB)
+	if err != nil {
+		t.Fatalf("mustCreateSession: %v", err)
+	}
+	return token
 }
 
 func mustCreateRole(t *testing.T, name string) {

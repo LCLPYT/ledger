@@ -50,7 +50,7 @@ func Login(db *sql.DB) gin.HandlerFunc {
 
 		userIDStr := strconv.FormatInt(userID, 10)
 
-		token, err := auth.GenerateSessionToken(userIDStr)
+		token, err := auth.GenerateSessionToken(userIDStr, db)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 			return
@@ -60,10 +60,27 @@ func Login(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func RefreshSession() gin.HandlerFunc {
+func RefreshSession(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetString("userID")
-		token, err := auth.GenerateSessionToken(userID)
+		sessionID := c.GetString("sessionID")
+
+		expiry := time.Now().Add(auth.SessionLifetime)
+		result, err := db.Exec(
+			"UPDATE sessions SET expires_at = $1 WHERE id = $2 AND user_id = $3",
+			expiry, sessionID, userID,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		n, err := result.RowsAffected()
+		if err != nil || n == 0 {
+			c.JSON(http.StatusUnauthorized, gin.H{"error": "session not found"})
+			return
+		}
+
+		token, err := auth.GenerateSessionTokenFromID(userID, sessionID, expiry)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 			return
@@ -277,9 +294,9 @@ func CreateUser(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func SetPassword(db *sql.DB) gin.HandlerFunc {
+func VerifyInvitation(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var req models.SetPasswordRequest
+		var req models.VerifyInvitationRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
 			return
@@ -335,5 +352,61 @@ func SetPassword(db *sql.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "password set, account activated"})
+	}
+}
+
+func ChangePassword(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req models.ChangePasswordRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+
+		userID := c.GetString("userID")
+
+		var passwordHash []byte
+		err := db.QueryRow(
+			"SELECT password_hash FROM users WHERE id = $1",
+			userID,
+		).Scan(&passwordHash)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if err := util.VerifyPassword(passwordHash, []byte(req.CurrentPassword)); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+			return
+		}
+
+		if err := util.ValidatePassword(req.NewPassword); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		hash, err := util.HashPassword([]byte(req.NewPassword))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "password hashing failed"})
+			return
+		}
+
+		if _, err = db.Exec(
+			"UPDATE users SET password_hash = $1 WHERE id = $2",
+			hash, userID,
+		); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if _, err = db.Exec(
+			"DELETE FROM sessions WHERE user_id = $1",
+			userID,
+		); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "password changed"})
 	}
 }

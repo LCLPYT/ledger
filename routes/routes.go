@@ -20,7 +20,7 @@ var openapiSpec []byte
 func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	r.Use(cors.New(cors.Config{
 		AllowOrigins:     []string{"http://localhost:3000"},
-		AllowMethods:     []string{"GET", "POST", "DELETE", "OPTIONS"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Authorization", "Content-Type"},
 		ExposeHeaders:    []string{"Content-Length"},
 		AllowCredentials: true,
@@ -37,18 +37,19 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	v1 := r.Group("/api/v1")
 
 	user := v1.Group("/user")
-	user.POST("/login", handlers.Login(db))
-	user.POST("/session/refresh", middleware.SessionRequired, handlers.RefreshSession())
+	user.POST("/login", middleware.NotAuthenticated, handlers.Login(db))
+	user.POST("/session/refresh", middleware.SessionRequired(db), handlers.RefreshSession(db))
 	user.POST("/token", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.CreateToken(db, enforcer))
 	user.GET("/tokens", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.ListTokens(db))
 	user.DELETE("/tokens/:id", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.RevokeToken(db))
 	user.GET("", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUser(db))
+	user.PUT("/password", middleware.SessionRequired(db), handlers.ChangePassword(db))
 
 	users := v1.Group("/users")
 	users.GET("", middleware.AuthRequired(enforcer, db, perms.UsersRead), handlers.ListUsers(db))
 	users.POST("", middleware.AuthRequired(enforcer, db, perms.UsersCreate), handlers.CreateUser(db))
 
-	v1.POST("/auth/set-password", handlers.SetPassword(db))
+	v1.POST("/auth/verify-invitation", middleware.NotAuthenticated, handlers.VerifyInvitation(db))
 
 	roles := v1.Group("/roles")
 	roles.GET("", middleware.AuthRequired(enforcer, db, perms.RolesRead), handlers.ListRoles(db, enforcer))

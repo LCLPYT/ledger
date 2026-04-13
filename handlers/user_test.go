@@ -22,14 +22,14 @@ import (
 func refreshSessionRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/user/session/refresh", middleware.SessionRequired, handlers.RefreshSession())
+	r.POST("/api/v1/user/session/refresh", middleware.SessionRequired(testDB), handlers.RefreshSession(testDB))
 	return r
 }
 
 func loginRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/user/login", handlers.Login(testDB))
+	r.POST("/api/v1/user/login", middleware.NotAuthenticated, handlers.Login(testDB))
 	return r
 }
 
@@ -120,6 +120,25 @@ func TestLogin_MissingFields(t *testing.T) {
 	cleanDB(t)
 
 	w := postLogin(loginRouter(), `{}`)
+
+	assert.Equal(t, http.StatusBadRequest, w.Code)
+}
+
+func TestLogin_AlreadyLoggedIn(t *testing.T) {
+	cleanDB(t)
+	mustCreateUser(t, "carol", "carol@example.com", "correct")
+
+	w := postLogin(loginRouter(), `{"identifier":"carol","password":"correct"}`)
+
+	assert.Equal(t, http.StatusOK, w.Code)
+
+	var resp map[string]string
+	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
+
+	token := resp["token"]
+
+	w = httptest.NewRecorder()
+	loginRouter().ServeHTTP(w, authedRequest(http.MethodPost, "/api/v1/user/login", token, `{"identifier":"carol","password":"correct"}`))
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 }

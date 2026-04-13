@@ -28,21 +28,46 @@ type Claims struct {
 
 // GenerateSessionToken generates a session token intended for graphical frontends.
 // Session tokens implicitly grant all permissions that the user has.
-// Session tokens are not stored in the database and cannot be revoked.
-func GenerateSessionToken(userID string) (string, error) {
+// Session tokens are stored in the database and can be revoked.
+func GenerateSessionToken(userID string, db *sql.DB) (string, error) {
 	expiry := time.Now().Add(SessionLifetime)
+
+	var sessionID int64
+	err := db.QueryRow(
+		"INSERT INTO sessions (user_id, expires_at) VALUES ($1, $2) RETURNING id",
+		userID, expiry,
+	).Scan(&sessionID)
+	if err != nil {
+		return "", err
+	}
 
 	claims := &Claims{
 		UserID:  userID,
 		TokenId: "",
 		Type:    TypeSession,
 		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        strconv.FormatInt(sessionID, 10),
 			ExpiresAt: jwt.NewNumericDate(expiry),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 
+	return token.SignedString(JwtKey)
+}
+
+// GenerateSessionTokenFromID re-signs a session JWT for an existing session row (used during refresh).
+func GenerateSessionTokenFromID(userID string, sessionID string, expiry time.Time) (string, error) {
+	claims := &Claims{
+		UserID:  userID,
+		TokenId: "",
+		Type:    TypeSession,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ID:        sessionID,
+			ExpiresAt: jwt.NewNumericDate(expiry),
+		},
+	}
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	return token.SignedString(JwtKey)
 }
 
