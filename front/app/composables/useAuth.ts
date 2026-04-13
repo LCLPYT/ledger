@@ -114,5 +114,21 @@ export const useAuth = () => {
     })
   }
 
-  return { token, user, permissions, login, logout, fetchUser, fetchPermissions, hasPermission, apiFetch, refreshIfNeeded, changePassword }
+  async function updateUsername(username: string, currentPassword: string) {
+    const res = await apiFetch<{ username: string }>('/api/v1/user/username', {
+      method: 'PUT',
+      body: { username, current_password: currentPassword },
+    })
+    if (user.value) user.value = { ...user.value, username: res.username }
+  }
+
+  async function updateEmail(email: string, currentPassword: string) {
+    const res = await apiFetch<{ email: string }>('/api/v1/user/email', {
+      method: 'PUT',
+      body: { email, current_password: currentPassword },
+    })
+    if (user.value) user.value = { ...user.value, email: res.email }
+  }
+
+  return { token, user, permissions, login, logout, fetchUser, fetchPermissions, hasPermission, apiFetch, refreshIfNeeded, changePassword, updateUsername, updateEmail }
 }

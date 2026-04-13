@@ -417,6 +417,74 @@ func ChangePassword(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+func UpdateUsername(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req models.UpdateUsernameRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+
+		userID := c.GetString("userID")
+
+		var passwordHash []byte
+		if err := db.QueryRow("SELECT password_hash FROM users WHERE id = $1", userID).Scan(&passwordHash); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if err := util.VerifyPassword(passwordHash, []byte(req.CurrentPassword)); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+			return
+		}
+
+		if _, err := db.Exec("UPDATE users SET username = $1 WHERE id = $2", req.Username, userID); err != nil {
+			if pqErr, ok := errors.AsType[*pq.Error](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
+				c.JSON(http.StatusConflict, gin.H{"error": "username already taken"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"username": req.Username})
+	}
+}
+
+func UpdateEmail(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req models.UpdateEmailRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+
+		userID := c.GetString("userID")
+
+		var passwordHash []byte
+		if err := db.QueryRow("SELECT password_hash FROM users WHERE id = $1", userID).Scan(&passwordHash); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if err := util.VerifyPassword(passwordHash, []byte(req.CurrentPassword)); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+			return
+		}
+
+		if _, err := db.Exec("UPDATE users SET email = $1 WHERE id = $2", req.Email, userID); err != nil {
+			if pqErr, ok := errors.AsType[*pq.Error](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
+				c.JSON(http.StatusConflict, gin.H{"error": "email already taken"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"email": req.Email})
+	}
+}
+
 func DeleteUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		targetID, err := strconv.ParseInt(c.Param("id"), 10, 64)

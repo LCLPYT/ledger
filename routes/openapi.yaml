@@ -235,6 +235,67 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/user/username:
+    put:
+      summary: Change username
+      description: Updates the authenticated user's username. Requires a session token and current password confirmation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateUsernameRequest"
+      responses:
+        "200":
+          description: Username updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  username:
+                    type: string
+                    example: newname
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
+  /api/v1/user/email:
+    put:
+      summary: Change email
+      description: Updates the authenticated user's email address. Requires a session token and current password confirmation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateEmailRequest"
+      responses:
+        "200":
+          description: Email updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  email:
+                    type: string
+                    format: email
+                    example: new@example.com
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          $ref: "#/components/responses/Conflict"
+
   /api/v1/roles:
     get:
       summary: List all roles with their members
@@ -590,6 +651,31 @@ components:
           format: password
           minLength: 8
           example: NewP@ss1word
+
+    UpdateUsernameRequest:
+      type: object
+      required: [username, current_password]
+      properties:
+        username:
+          type: string
+          example: newname
+        current_password:
+          type: string
+          format: password
+          example: MyP@ss1word
+
+    UpdateEmailRequest:
+      type: object
+      required: [email, current_password]
+      properties:
+        email:
+          type: string
+          format: email
+          example: new@example.com
+        current_password:
+          type: string
+          format: password
+          example: MyP@ss1word
 
     CreateRoleRequest:
       type: object
