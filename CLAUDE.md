@@ -57,10 +57,29 @@ Casbin policies are stored in the database (not files).
 - `POST /api/v1/user/token` (auth required, `user.create_token`) → creates a named long-lived token (max 1 year) stored in the `access_tokens` table with JSONB scopes.
 - `auth.GenerateToken` writes a row to `access_tokens` and embeds the row ID as `token_id` in the JWT claims.
 
+### Permission constants
+
+`perms/permissions.go` defines all permission strings as constants (`perms.UsersRead`, etc.) and two slices:
+- `perms.All` — every known permission; used by `GET /api/v1/user/permissions` to enumerate what a user holds
+- `perms.DefaultPermissions` — granted to newly created users
+
+### Role invariants (enforced in handlers)
+
+- **`admin` role** — permissions cannot be added or removed (`AddRolePermission`/`RemoveRolePermission` return 403)
+- **`default` role** — users cannot be removed from it (`RemoveUserFromRole` returns 403); every new user is assigned it automatically
+
+### Effective permissions endpoint
+
+`GET /api/v1/user/permissions` (requires `user.read`) returns the caller's effective permissions as a string array. For session tokens it calls `enforcer.Enforce` for each entry in `perms.All` — this correctly handles wildcard policies (`*.*`, `obj.*`) and transitive role inheritance. For access tokens it returns the token's scopes.
+
+The middleware sets `tokenType` and `tokenScopes` in the Gin context (via `c.Set`) so downstream handlers can inspect them without re-parsing the JWT.
+
 ### Database schema
 
 - `users` — id, username, email, created_at, password_hash (bcrypt)
 - `access_tokens` — id, user_id (FK), name, created_at, expires_at, revoked, scopes (JSONB)
+
+All tables that reference `users` use `ON DELETE CASCADE`, so `DELETE FROM users WHERE id = $1` is sufficient; Casbin role assignments must be cleaned up separately via `enforcer.DeleteUser(userIDStr)`.
 
 Migrations live in `migrations/` and run automatically on server startup.
 
