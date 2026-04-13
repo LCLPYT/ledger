@@ -12,6 +12,11 @@ The backend implements Role-based-authentication for users.
 API auth is handled via access tokens with granular permissions / scopes.
 For the web dashboard, short-lived stateless session tokens are used.
 
+> [!NOTE]
+> In this project I am trying out the capabilities of Claude Code and the viability to use in projects like this.
+> This involves testing limits and finding boundaries on its capabilities on my use case.
+> Thus, the codebase may not be as "clean" or refactored as I would like it to be.
+
 ## Backend service
 ### Prerequisites
 - [Go](https://go.dev/)
