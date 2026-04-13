@@ -148,7 +148,7 @@ definePageMeta({
   middleware: ['auth'],
 })
 
-const { apiFetch } = useAuth()
+const { apiFetch, permissions: allPermissions } = useAuth()
 
 interface Role {
   id: number
@@ -159,18 +159,13 @@ interface Role {
 }
 
 const roles = ref<Role[]>([])
-const allPermissions = ref<string[]>([])
 const rolePermissions = ref<Record<string, string[]>>({})
 const fetchError = ref('')
 
 async function load() {
   try {
-    const [r, p] = await Promise.all([
-      apiFetch<Role[]>('/api/v1/roles'),
-      apiFetch<{ permissions: string[] }>('/api/v1/user/permissions'),
-    ])
+    const r = await apiFetch<Role[]>('/api/v1/roles')
     roles.value = r
-    allPermissions.value = p.permissions
 
     const permsMap: Record<string, string[]> = {}
     await Promise.all(

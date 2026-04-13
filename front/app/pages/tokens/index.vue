@@ -131,7 +131,7 @@ definePageMeta({
   middleware: ['auth'],
 })
 
-const { apiFetch } = useAuth()
+const { apiFetch, permissions: allPermissions } = useAuth()
 
 interface AccessToken {
   id: number
@@ -143,19 +143,13 @@ interface AccessToken {
 }
 
 const tokens = ref<AccessToken[]>([])
-const allPermissions = ref<string[]>([])
 const fetchError = ref('')
 const newToken = ref('')
 const copied = ref(false)
 
 async function load() {
   try {
-    const [t, p] = await Promise.all([
-      apiFetch<AccessToken[]>('/api/v1/user/tokens'),
-      apiFetch<{ permissions: string[] }>('/api/v1/user/permissions'),
-    ])
-    tokens.value = t
-    allPermissions.value = p.permissions
+    tokens.value = await apiFetch<AccessToken[]>('/api/v1/user/tokens')
   } catch {
     fetchError.value = 'Failed to load data. Check your permissions.'
   }
