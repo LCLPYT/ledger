@@ -20,16 +20,16 @@ delete_db: stop_db
     docker volume rm ledger_pgdata || true
 
 serve: db mailpit
-    go run .
+    go run . serve
 
 psql: db
     docker compose exec -it postgres psql -U db
 
 create_user: db
-    go run cmd/create_user/main.go
+    go run . user create
 
 init_roles: db
-    go run cmd/init_roles/main.go
+    go run . roles init
 
 test filter="":
     docker compose down postgres_test

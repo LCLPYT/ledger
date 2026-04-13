@@ -1,4 +1,4 @@
-package main
+package cmd
 
 import (
 	"fmt"
@@ -9,12 +9,22 @@ import (
 	"strings"
 )
 
-func permPolicy(role, perm string) []string {
-	parts := strings.SplitN(perm, ".", 2)
-	return []string{role, parts[0], parts[1]}
+func RunRoles(args []string) {
+	if len(args) < 1 {
+		fmt.Fprintln(os.Stderr, "Usage:")
+		fmt.Fprintln(os.Stderr, "  ledger roles init  Initialize default and admin roles")
+		os.Exit(1)
+	}
+	switch args[0] {
+	case "init":
+		runInitRoles()
+	default:
+		fmt.Fprintf(os.Stderr, "Unknown roles command: %s\n", args[0])
+		os.Exit(1)
+	}
 }
 
-func main() {
+func runInitRoles() {
 	dsn := os.Getenv("DATABASE_URL")
 	database := db.InitDB(dsn)
 	defer database.Close()
@@ -30,6 +40,11 @@ func main() {
 		}
 	}
 
+	permPolicy := func(role, perm string) []string {
+		parts := strings.SplitN(perm, ".", 2)
+		return []string{role, parts[0], parts[1]}
+	}
+
 	defaultPerms := []string{perms.UserRead, perms.UserCreateToken}
 	var policies [][]string
 	for _, p := range defaultPerms {
@@ -37,8 +52,7 @@ func main() {
 	}
 	policies = append(policies, []string{"admin", "*", "*"})
 
-	_, err := enforcer.AddPolicies(policies)
-	if err != nil {
+	if _, err := enforcer.AddPolicies(policies); err != nil {
 		log.Fatalf("Failed to add policies: %v", err)
 	}
 
