@@ -90,9 +90,9 @@ watch(route, () => {
 
 const ALL_NAV_ITEMS = [
   { to: '/',         label: 'Dashboard', icon: LayoutDashboard, permission: null },
-  { to: '/users',    label: 'Users',     icon: Users,           permission: 'users.read' },
-  { to: '/roles',    label: 'Roles',     icon: Shield,          permission: 'roles.read' },
-  { to: '/tokens',   label: 'Tokens',    icon: KeyRound,        permission: 'user.create_token' },
+  { to: '/users',    label: 'Users',     icon: Users,           permission: Perms.UsersRead },
+  { to: '/roles',    label: 'Roles',     icon: Shield,          permission: Perms.RolesRead },
+  { to: '/tokens',   label: 'Tokens',    icon: KeyRound,        permission: Perms.UserCreateToken },
   { to: '/settings', label: 'Settings',  icon: Settings,        permission: null },
 ]
 
