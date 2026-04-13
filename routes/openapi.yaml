@@ -169,6 +169,27 @@ paths:
         "409":
           $ref: "#/components/responses/Conflict"
 
+  /api/v1/users/{id}:
+    delete:
+      summary: Delete a user
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: User deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/auth/verify-invitation:
     post:
       summary: Verify invitation and set password

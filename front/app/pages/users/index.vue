@@ -36,7 +36,7 @@
                   >
                     {{ role }}
                     <button
-                      v-if="hasPermission(Perms.RolesManageUsers)"
+                      v-if="hasPermission(Perms.RolesManageUsers) && role !== 'default'"
                       class="hover:text-destructive transition-colors"
                       title="Remove role"
                       @click="removeRole(u.id, role)"
@@ -48,7 +48,16 @@
                 </div>
               </TableCell>
               <TableCell class="text-right">
-                <Button v-if="hasPermission(Perms.RolesManageUsers)" variant="ghost" size="sm" @click="openAssignDialog(u)">Assign role</Button>
+                <div class="flex items-center justify-end gap-2">
+                  <Button v-if="hasPermission(Perms.RolesManageUsers)" variant="ghost" size="sm" @click="openAssignDialog(u)">Assign role</Button>
+                  <Button
+                    v-if="hasPermission(Perms.UsersCreate) && u.id !== user?.id"
+                    variant="ghost"
+                    size="sm"
+                    class="text-destructive hover:text-destructive"
+                    @click="openDeleteDialog(u)"
+                  >Delete</Button>
+                </div>
               </TableCell>
             </TableRow>
             <TableRow v-if="users.length === 0">
@@ -127,6 +136,33 @@
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    <!-- Delete user confirmation dialog -->
+    <Dialog :open="deleteDialog.open" @update:open="deleteDialog.open = $event">
+      <DialogContent class="w-80">
+        <DialogHeader>
+          <DialogTitle>Delete user</DialogTitle>
+        </DialogHeader>
+
+        <p class="text-sm text-muted-foreground">
+          Are you sure you want to delete <span class="font-medium text-foreground">{{ deleteDialog.user?.username }}</span>?
+          This will remove their account, tokens, and sessions permanently.
+        </p>
+
+        <p v-if="deleteDialog.error" class="text-sm text-destructive">{{ deleteDialog.error }}</p>
+
+        <DialogFooter>
+          <Button variant="outline" @click="deleteDialog.open = false">Cancel</Button>
+          <Button
+            variant="destructive"
+            :disabled="deleteDialog.loading"
+            @click="confirmDeleteUser"
+          >
+            {{ deleteDialog.loading ? 'Deleting…' : 'Delete' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
 
@@ -144,7 +180,7 @@ definePageMeta({
   middleware: ['auth'],
 })
 
-const { apiFetch, hasPermission } = useAuth()
+const { apiFetch, hasPermission, user } = useAuth()
 
 interface User {
   id: number
@@ -280,6 +316,37 @@ async function removeRole(userId: number, roleName: string) {
   } catch (e: unknown) {
     const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to remove role'
     toast.error(msg)
+  }
+}
+
+const deleteDialog = reactive({
+  open: false,
+  user: null as User | null,
+  loading: false,
+  error: '',
+})
+
+function openDeleteDialog(u: User) {
+  deleteDialog.user = u
+  deleteDialog.error = ''
+  deleteDialog.open = true
+}
+
+async function confirmDeleteUser() {
+  if (!deleteDialog.user) return
+  deleteDialog.loading = true
+  deleteDialog.error = ''
+  const { user: target } = deleteDialog
+  try {
+    await apiFetch(`/api/v1/users/${target.id}`, { method: 'DELETE' })
+    deleteDialog.open = false
+    await load()
+    toast.success(`User "${target.username}" deleted`)
+  } catch (e: unknown) {
+    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to delete user'
+    deleteDialog.error = msg
+  } finally {
+    deleteDialog.loading = false
   }
 }
 </script>

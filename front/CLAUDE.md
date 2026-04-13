@@ -44,7 +44,11 @@ Config: `components.json`. Aliases: `@/components/ui`, `@/lib`, `@/composables`.
 
 **API calls** — use `apiFetch` from `useAuth`, not `$fetch` directly. It attaches the Bearer token.
 
-**Auth state** — `useAuth()` exposes `user`, `login`, `logout`, `fetchUser`, `apiFetch`.
+**Auth state** — `useAuth()` exposes `user`, `login`, `logout`, `fetchUser`, `apiFetch`, `permissions`, `fetchPermissions`, `hasPermission`.
+
+**Permission constants** — `app/utils/permissions.ts` exports `Perms` (e.g. `Perms.UsersRead`), auto-imported everywhere. Mirrors the backend `perms` package. Use `hasPermission(Perms.Foo)` to gate UI elements; `permissions` is `null` until loaded (treat as "not yet known", not "none granted").
+
+**Permission-gated UI** — use `v-if="hasPermission(Perms.Foo)"` on buttons/actions. `permissions` is fetched once after login and cached in `useState`; no per-page fetch needed.
 
 **shadcn Dialog** — always use `:open` + `@update:open`, never `v-if` on `<Dialog>`. `v-if` breaks Escape-key close.
 

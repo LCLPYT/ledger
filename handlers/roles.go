@@ -138,6 +138,11 @@ func AddRolePermission(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleName := c.Param("role")
 
+		if roleName == "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "cannot modify permissions of the admin role"})
+			return
+		}
+
 		var req models.RolePermissionRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -171,6 +176,11 @@ func AddRolePermission(enforcer *casbin.Enforcer) gin.HandlerFunc {
 func RemoveRolePermission(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleName := c.Param("role")
+
+		if roleName == "admin" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "cannot modify permissions of the admin role"})
+			return
+		}
 
 		var req models.RolePermissionRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -240,6 +250,11 @@ func AddUserToRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 func RemoveUserFromRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleName := c.Param("role")
+
+		if roleName == "default" {
+			c.JSON(http.StatusForbidden, gin.H{"error": "cannot remove users from the default role"})
+			return
+		}
 
 		var req models.RoleUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
