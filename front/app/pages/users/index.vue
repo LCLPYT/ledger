@@ -2,7 +2,7 @@
   <div class="p-4 md:p-8 space-y-6">
     <div class="flex items-center justify-between">
       <h2 class="text-2xl font-semibold text-foreground">Users</h2>
-      <Button @click="openInviteDialog">New user</Button>
+      <Button v-if="hasPermission(Perms.UsersCreate)" @click="openInviteDialog">New user</Button>
     </div>
 
     <!-- Error state -->
@@ -36,6 +36,7 @@
                   >
                     {{ role }}
                     <button
+                      v-if="hasPermission(Perms.RolesManageUsers)"
                       class="hover:text-destructive transition-colors"
                       title="Remove role"
                       @click="removeRole(u.id, role)"
@@ -47,7 +48,7 @@
                 </div>
               </TableCell>
               <TableCell class="text-right">
-                <Button variant="ghost" size="sm" @click="openAssignDialog(u)">Assign role</Button>
+                <Button v-if="hasPermission(Perms.RolesManageUsers)" variant="ghost" size="sm" @click="openAssignDialog(u)">Assign role</Button>
               </TableCell>
             </TableRow>
             <TableRow v-if="users.length === 0">
@@ -143,7 +144,7 @@ definePageMeta({
   middleware: ['auth'],
 })
 
-const { apiFetch } = useAuth()
+const { apiFetch, hasPermission } = useAuth()
 
 interface User {
   id: number

@@ -21,7 +21,7 @@ func createUserRouter() *gin.Engine {
 	r := gin.New()
 	r.POST("/api/v1/users",
 		middleware.AuthRequired(testEnforcer, testDB, perms.UsersCreate),
-		handlers.CreateUser(testDB))
+		handlers.CreateUser(testDB, testEnforcer))
 	return r
 }
 

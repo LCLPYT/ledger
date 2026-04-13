@@ -2,7 +2,7 @@
   <div class="p-4 md:p-8 space-y-6">
     <div class="flex items-center justify-between">
       <h2 class="text-2xl font-semibold text-foreground">Roles</h2>
-      <Button @click="openCreateDialog">New role</Button>
+      <Button v-if="hasPermission(Perms.RolesCreate)" @click="openCreateDialog">New role</Button>
     </div>
 
     <!-- Error state -->
@@ -46,6 +46,7 @@
               <TableCell class="text-right">
                 <div class="flex items-center justify-end gap-2">
                   <Button
+                    v-if="hasPermission(Perms.RolesCreate)"
                     variant="ghost"
                     size="sm"
                     :disabled="r.protected"
@@ -55,6 +56,7 @@
                     Permissions
                   </Button>
                   <Button
+                    v-if="hasPermission(Perms.RolesCreate)"
                     variant="ghost"
                     size="sm"
                     :disabled="r.protected"
@@ -148,7 +150,7 @@ definePageMeta({
   middleware: ['auth'],
 })
 
-const { apiFetch } = useAuth()
+const { apiFetch, permissions: allPermissions, hasPermission } = useAuth()
 
 interface Role {
   id: number
@@ -159,18 +161,13 @@ interface Role {
 }
 
 const roles = ref<Role[]>([])
-const allPermissions = ref<string[]>([])
 const rolePermissions = ref<Record<string, string[]>>({})
 const fetchError = ref('')
 
 async function load() {
   try {
-    const [r, p] = await Promise.all([
-      apiFetch<Role[]>('/api/v1/roles'),
-      apiFetch<{ permissions: string[] }>('/api/v1/permissions'),
-    ])
+    const r = await apiFetch<Role[]>('/api/v1/roles')
     roles.value = r
-    allPermissions.value = p.permissions
 
     const permsMap: Record<string, string[]> = {}
     await Promise.all(

@@ -43,11 +43,12 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	user.GET("/tokens", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.ListTokens(db))
 	user.DELETE("/tokens/:id", middleware.AuthRequired(enforcer, db, perms.UserCreateToken), handlers.RevokeToken(db))
 	user.GET("", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUser(db))
+	user.GET("/permissions", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUserPermissions(enforcer))
 	user.PUT("/password", middleware.SessionRequired(db), handlers.ChangePassword(db))
 
 	users := v1.Group("/users")
 	users.GET("", middleware.AuthRequired(enforcer, db, perms.UsersRead), handlers.ListUsers(db))
-	users.POST("", middleware.AuthRequired(enforcer, db, perms.UsersCreate), handlers.CreateUser(db))
+	users.POST("", middleware.AuthRequired(enforcer, db, perms.UsersCreate), handlers.CreateUser(db, enforcer))
 
 	v1.POST("/auth/verify-invitation", middleware.NotAuthenticated, handlers.VerifyInvitation(db))
 
@@ -61,6 +62,4 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	roles.POST("/:role/users", middleware.AuthRequired(enforcer, db, perms.RolesManageUsers), handlers.AddUserToRole(db, enforcer))
 	roles.DELETE("/:role/users", middleware.AuthRequired(enforcer, db, perms.RolesManageUsers), handlers.RemoveUserFromRole(db, enforcer))
 
-	permissions := v1.Group("/permissions")
-	permissions.GET("", middleware.AuthRequired(enforcer, db, perms.PermissionsList), handlers.ListPermissions())
 }
