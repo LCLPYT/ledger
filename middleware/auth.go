@@ -46,18 +46,22 @@ func SessionRequired(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var exists int
-		err := db.QueryRow(
-			"SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2 AND expires_at > now()",
-			claims.RegisteredClaims.ID, claims.UserID,
-		).Scan(&exists)
-		if err != nil {
+		if !sessionExists(db, claims.RegisteredClaims.ID, claims.UserID) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired or revoked"})
 			return
 		}
 
 		c.Next()
 	}
+}
+
+func sessionExists(db *sql.DB, sessionID, userID string) bool {
+	var exists int
+	err := db.QueryRow(
+		"SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2 AND expires_at > now()",
+		sessionID, userID,
+	).Scan(&exists)
+	return err == nil
 }
 
 func DecodeJwt(c *gin.Context) (*auth.Claims, bool) {
@@ -87,12 +91,7 @@ func HandleSessionTokenAuth(c *gin.Context, db *sql.DB, requiredPermissions []st
 	userID := c.GetString("userID")
 	sessionID := c.GetString("sessionID")
 
-	var exists int
-	err := db.QueryRow(
-		"SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2 AND expires_at > now()",
-		sessionID, userID,
-	).Scan(&exists)
-	if err != nil {
+	if !sessionExists(db, sessionID, userID) {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired or revoked"})
 		return
 	}
