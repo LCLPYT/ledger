@@ -46,6 +46,7 @@
               <TableCell class="text-right">
                 <div class="flex items-center justify-end gap-2">
                   <Button
+                    v-if="hasPermission(Perms.RolesCreate)"
                     variant="ghost"
                     size="sm"
                     :disabled="r.protected"
@@ -55,6 +56,7 @@
                     Permissions
                   </Button>
                   <Button
+                    v-if="hasPermission(Perms.RolesCreate)"
                     variant="ghost"
                     size="sm"
                     :disabled="r.protected"
