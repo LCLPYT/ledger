@@ -8,7 +8,17 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 )
+
+// validateUUID returns false and writes a 400 response if the string is not a valid UUID.
+func validateUUID(c *gin.Context, raw string) bool {
+	if _, err := uuid.Parse(raw); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid uuid"})
+		return false
+	}
+	return true
+}
 
 // UpsertPlayer inserts a minecraft_players row if it doesn't exist and returns the player's DB id.
 func UpsertPlayer(tx *sql.Tx, uuid string) (int64, error) {
@@ -109,7 +119,10 @@ func parsePagination(c *gin.Context) (limit, offset int) {
 
 func AwardCoins(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		uuid := c.Param("uuid")
+		uid := c.Param("uuid")
+		if !validateUUID(c, uid) {
+			return
+		}
 
 		var req models.AwardCoinsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -126,7 +139,7 @@ func AwardCoins(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		playerID, err := UpsertPlayer(tx, uuid)
+		playerID, err := UpsertPlayer(tx, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -154,7 +167,10 @@ func AwardCoins(db *sql.DB) gin.HandlerFunc {
 
 func SpendCoins(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		uuid := c.Param("uuid")
+		uid := c.Param("uuid")
+		if !validateUUID(c, uid) {
+			return
+		}
 
 		var req models.SpendCoinsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -164,7 +180,7 @@ func SpendCoins(db *sql.DB) gin.HandlerFunc {
 
 		actorUserID, actorTokenID := actorIDs(c)
 
-		playerID, err := GetPlayerID(db, uuid)
+		playerID, err := GetPlayerID(db, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -213,7 +229,10 @@ func SpendCoins(db *sql.DB) gin.HandlerFunc {
 
 func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		uuid := c.Param("uuid")
+		uid := c.Param("uuid")
+		if !validateUUID(c, uid) {
+			return
+		}
 
 		var req models.AdjustCoinsRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -230,7 +249,7 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		playerID, err := UpsertPlayer(tx, uuid)
+		playerID, err := UpsertPlayer(tx, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -268,14 +287,17 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 
 func GetPlayerCoins(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		uuid := c.Param("uuid")
+		uid := c.Param("uuid")
+		if !validateUUID(c, uid) {
+			return
+		}
 
 		var balance int64
 		err := db.QueryRow(
 			`SELECT cb.balance FROM coin_balances cb
 			 JOIN minecraft_players mp ON mp.id = cb.player_id
 			 WHERE mp.uuid = $1`,
-			uuid,
+			uid,
 		).Scan(&balance)
 		if err == sql.ErrNoRows {
 			c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
@@ -292,10 +314,13 @@ func GetPlayerCoins(db *sql.DB) gin.HandlerFunc {
 
 func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		uuid := c.Param("uuid")
+		uid := c.Param("uuid")
+		if !validateUUID(c, uid) {
+			return
+		}
 		limit, offset := parsePagination(c)
 
-		playerID, err := GetPlayerID(db, uuid)
+		playerID, err := GetPlayerID(db, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
