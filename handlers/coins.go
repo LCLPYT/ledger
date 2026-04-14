@@ -387,8 +387,12 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// FetchUsername is the function used to resolve a Minecraft UUID to a username.
+// It can be replaced in tests to avoid real network calls.
+var FetchUsername = mojang.FetchUsername
+
 func fetchAndCacheUsername(db *sql.DB, playerID int64, uuid string) {
-	name, err := mojang.FetchUsername(uuid)
+	name, err := FetchUsername(uuid)
 	if err != nil {
 		return
 	}

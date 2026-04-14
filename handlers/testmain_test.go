@@ -10,6 +10,7 @@ import (
 
 	"ledger/auth"
 	appdb "ledger/db"
+	"ledger/handlers"
 
 	"github.com/casbin/casbin/v2"
 	"golang.org/x/crypto/bcrypt"
@@ -21,6 +22,9 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	// Prevent tests from making real Mojang API calls.
+	handlers.FetchUsername = func(string) (string, error) { return "", nil }
+
 	dsn := os.Getenv("DATABASE_URL")
 
 	if dsn == "" {
