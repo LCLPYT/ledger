@@ -8,6 +8,8 @@ const (
 	RolesCreate      = "roles.create"
 	RolesRead        = "roles.read"
 	RolesManageUsers = "roles.manage_users"
+	CoinsRead        = "coins.read"
+	CoinsWrite       = "coins.write"
 )
 
 var All = []string{
@@ -18,6 +20,8 @@ var All = []string{
 	RolesCreate,
 	RolesRead,
 	RolesManageUsers,
+	CoinsRead,
+	CoinsWrite,
 }
 
 var DefaultPermissions = []string{

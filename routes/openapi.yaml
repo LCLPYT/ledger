@@ -509,6 +509,206 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/players:
+    get:
+      summary: List Minecraft players with their coin balances
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of players
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/MinecraftPlayer"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/players/{uuid}/coins:
+    get:
+      summary: Get a player's current coin balance
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+          example: 069a79f4-44e9-4726-a5be-fca90e38aaf5
+      responses:
+        "200":
+          description: Player balance
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  balance:
+                    type: integer
+                    format: int64
+                    example: 1500
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/players/{uuid}/coins/transactions:
+    get:
+      summary: List coin transactions for a player
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+            maximum: 200
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: List of transactions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/CoinTransaction"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/players/{uuid}/coins/award:
+    post:
+      summary: Award coins to a player (auto-creates player if unknown)
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AwardCoinsRequest"
+      responses:
+        "200":
+          description: New balance after award
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /api/v1/players/{uuid}/coins/spend:
+    post:
+      summary: Deduct coins from a player (fails if balance insufficient)
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SpendCoinsRequest"
+      responses:
+        "200":
+          description: New balance after spend
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "422":
+          description: Insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /api/v1/players/{uuid}/coins/adjust:
+    post:
+      summary: Adjust a player's balance by a signed amount (admin)
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AdjustCoinsRequest"
+      responses:
+        "200":
+          description: New balance after adjustment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/BalanceResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "422":
+          description: Insufficient balance
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /api/v1/user/permissions:
     get:
       summary: Get the current user's effective permissions
@@ -755,6 +955,125 @@ components:
         user_id:
           type: string
           example: "42"
+
+    MinecraftPlayer:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        uuid:
+          type: string
+          format: uuid
+          example: 069a79f4-44e9-4726-a5be-fca90e38aaf5
+        balance:
+          type: integer
+          format: int64
+          example: 1500
+        created_at:
+          type: string
+          format: date-time
+
+    CoinTransaction:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 42
+        player_id:
+          type: integer
+          format: int64
+          example: 1
+        amount:
+          type: integer
+          format: int64
+          description: Positive for awards, negative for spends
+          example: 100
+        source:
+          type: string
+          enum: [minigame, admin, purchase, system]
+          example: minigame
+        description:
+          type: string
+          nullable: true
+          example: "Placed 1st in SkyWars"
+        created_at:
+          type: string
+          format: date-time
+        actor_user_id:
+          type: integer
+          format: int64
+          nullable: true
+          example: 3
+        actor_token_id:
+          type: integer
+          format: int64
+          nullable: true
+          example: 7
+
+    AwardCoinsRequest:
+      type: object
+      required: [amount, source]
+      properties:
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 100
+        source:
+          type: string
+          enum: [minigame, admin, purchase, system]
+          example: minigame
+        description:
+          type: string
+          nullable: true
+          example: "Placed 1st in SkyWars"
+
+    SpendCoinsRequest:
+      type: object
+      required: [amount, source]
+      properties:
+        amount:
+          type: integer
+          format: int64
+          minimum: 1
+          example: 50
+        source:
+          type: string
+          enum: [minigame, admin, purchase, system]
+          example: purchase
+        description:
+          type: string
+          nullable: true
+          example: "Bought cosmetic hat"
+
+    AdjustCoinsRequest:
+      type: object
+      required: [amount, source]
+      properties:
+        amount:
+          type: integer
+          format: int64
+          description: Positive to add, negative to deduct
+          example: -25
+        source:
+          type: string
+          enum: [minigame, admin, purchase, system]
+          example: admin
+        description:
+          type: string
+          nullable: true
+          example: "Manual correction"
+
+    BalanceResponse:
+      type: object
+      properties:
+        balance:
+          type: integer
+          format: int64
+          example: 1450
 
     Message:
       type: object
