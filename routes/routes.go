@@ -72,5 +72,6 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	players.POST("/:uuid/coins/award", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.AwardCoins(db))
 	players.POST("/:uuid/coins/spend", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.SpendCoins(db))
 	players.POST("/:uuid/coins/adjust", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.AdjustCoins(db))
+	players.DELETE("/:uuid", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.DeletePlayer(db))
 
 }

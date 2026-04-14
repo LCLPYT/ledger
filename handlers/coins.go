@@ -309,6 +309,26 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+func DeletePlayer(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		uid := c.Param("uuid")
+		if !validateUUID(c, uid) {
+			return
+		}
+		result, err := db.Exec("DELETE FROM minecraft_players WHERE uuid = $1", uid)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		rows, _ := result.RowsAffected()
+		if rows == 0 {
+			c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
+			return
+		}
+		c.Status(http.StatusNoContent)
+	}
+}
+
 func GetPlayerCoins(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.Param("uuid")

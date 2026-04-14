@@ -538,6 +538,23 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/players/{uuid}:
+    delete:
+      summary: Delete a player and all their coin data
+      parameters:
+        - $ref: "#/components/parameters/PlayerUUID"
+      responses:
+        "204":
+          description: Player deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/players/{uuid}/coins:
     get:
       summary: Get a player's current coin balance
