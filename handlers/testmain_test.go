@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 
 func cleanDB(t *testing.T) {
 	t.Helper()
-	_, err := testDB.Exec("TRUNCATE access_tokens, sessions, users, user_invitations, roles RESTART IDENTITY CASCADE")
+	_, err := testDB.Exec("TRUNCATE access_tokens, sessions, users, user_invitations, roles, coin_transactions, coin_balances, minecraft_players RESTART IDENTITY CASCADE")
 	if err != nil {
 		t.Fatalf("cleanDB: %v", err)
 	}

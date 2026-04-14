@@ -10,8 +10,8 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-// upsertPlayer inserts a minecraft_players row if it doesn't exist and returns the player's DB id.
-func upsertPlayer(tx *sql.Tx, uuid string) (int64, error) {
+// UpsertPlayer inserts a minecraft_players row if it doesn't exist and returns the player's DB id.
+func UpsertPlayer(tx *sql.Tx, uuid string) (int64, error) {
 	_, err := tx.Exec(
 		"INSERT INTO minecraft_players (uuid) VALUES ($1) ON CONFLICT (uuid) DO NOTHING",
 		uuid,
@@ -24,8 +24,8 @@ func upsertPlayer(tx *sql.Tx, uuid string) (int64, error) {
 	return id, err
 }
 
-// getPlayerID returns the DB id for a minecraft UUID, or 0 if not found.
-func getPlayerID(db *sql.DB, uuid string) (int64, error) {
+// GetPlayerID returns the DB id for a minecraft UUID, or 0 if not found.
+func GetPlayerID(db *sql.DB, uuid string) (int64, error) {
 	var id int64
 	err := db.QueryRow("SELECT id FROM minecraft_players WHERE uuid = $1", uuid).Scan(&id)
 	if err == sql.ErrNoRows {
@@ -74,7 +74,7 @@ func AwardCoins(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		playerID, err := upsertPlayer(tx, uuid)
+		playerID, err := UpsertPlayer(tx, uuid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -125,7 +125,7 @@ func SpendCoins(db *sql.DB) gin.HandlerFunc {
 
 		actorUserID, actorTokenID := actorIDs(c)
 
-		playerID, err := getPlayerID(db, uuid)
+		playerID, err := GetPlayerID(db, uuid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -208,7 +208,7 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		playerID, err := upsertPlayer(tx, uuid)
+		playerID, err := UpsertPlayer(tx, uuid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -301,7 +301,7 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 			offset = 0
 		}
 
-		playerID, err := getPlayerID(db, uuid)
+		playerID, err := GetPlayerID(db, uuid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
