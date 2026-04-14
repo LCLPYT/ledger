@@ -5,6 +5,7 @@ import "time"
 type MinecraftPlayer struct {
 	ID        int64     `json:"id"`
 	UUID      string    `json:"uuid"`
+	Username  *string   `json:"username"`
 	CreatedAt time.Time `json:"created_at"`
 	Balance   int64     `json:"balance"`
 }

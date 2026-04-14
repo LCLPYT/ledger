@@ -12,7 +12,7 @@
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>UUID</TableHead>
+              <TableHead>Name</TableHead>
               <TableHead>Balance</TableHead>
               <TableHead>Registered</TableHead>
               <TableHead />
@@ -20,7 +20,10 @@
           </TableHeader>
           <TableBody>
             <TableRow v-for="p in players" :key="p.id">
-              <TableCell class="font-mono text-xs">{{ p.uuid }}</TableCell>
+              <TableCell>
+                <span class="font-medium">{{ p.username ?? p.uuid }}</span>
+                <span v-if="p.username" class="block font-mono text-xs text-muted-foreground">{{ p.uuid }}</span>
+              </TableCell>
               <TableCell class="font-medium">{{ p.balance.toLocaleString() }}</TableCell>
               <TableCell>{{ formatDate(p.created_at) }}</TableCell>
               <TableCell class="text-right">
@@ -152,6 +155,7 @@ const { apiFetch, hasPermission } = useAuth()
 interface Player {
   id: number
   uuid: string
+  username: string | null
   balance: number
   created_at: string
 }

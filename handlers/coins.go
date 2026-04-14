@@ -4,8 +4,10 @@ import (
 	"database/sql"
 	"ledger/auth"
 	"ledger/models"
+	"ledger/mojang"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -363,12 +365,31 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+type stalePlayer struct {
+	id   int64
+	uuid string
+}
+
+func refreshUsernames(db *sql.DB, players []stalePlayer) {
+	for _, p := range players {
+		name, err := mojang.FetchUsername(p.uuid)
+		if err != nil {
+			// API unavailable or rate-limited — leave stale cache, try again next time
+			continue
+		}
+		_, _ = db.Exec(
+			`UPDATE minecraft_players SET username = NULLIF($1, ''), username_fetched_at = now() WHERE id = $2`,
+			name, p.id,
+		)
+	}
+}
+
 func ListPlayers(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limit, offset := parsePagination(c)
 
 		rows, err := db.Query(
-			`SELECT mp.id, mp.uuid, mp.created_at, COALESCE(cb.balance, 0)
+			`SELECT mp.id, mp.uuid, mp.username, mp.username_fetched_at, mp.created_at, COALESCE(cb.balance, 0)
 			 FROM minecraft_players mp
 			 LEFT JOIN coin_balances cb ON cb.player_id = mp.id
 			 ORDER BY mp.created_at DESC LIMIT $1 OFFSET $2`,
@@ -381,17 +402,27 @@ func ListPlayers(db *sql.DB) gin.HandlerFunc {
 		defer func() { _ = rows.Close() }()
 
 		players := make([]models.MinecraftPlayer, 0)
+		var stale []stalePlayer
+		staleThreshold := time.Now().Add(-7 * 24 * time.Hour)
 		for rows.Next() {
 			var p models.MinecraftPlayer
-			if err := rows.Scan(&p.ID, &p.UUID, &p.CreatedAt, &p.Balance); err != nil {
+			var fetchedAt *time.Time
+			if err := rows.Scan(&p.ID, &p.UUID, &p.Username, &fetchedAt, &p.CreatedAt, &p.Balance); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 				return
+			}
+			if fetchedAt == nil || fetchedAt.Before(staleThreshold) {
+				stale = append(stale, stalePlayer{id: p.ID, uuid: p.UUID})
 			}
 			players = append(players, p)
 		}
 		if err := rows.Err(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
+		}
+
+		if len(stale) > 0 {
+			go refreshUsernames(db, stale)
 		}
 
 		c.JSON(http.StatusOK, players)

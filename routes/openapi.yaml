@@ -967,6 +967,10 @@ components:
           type: string
           format: uuid
           example: 069a79f4-44e9-4726-a5be-fca90e38aaf5
+        username:
+          type: string
+          nullable: true
+          example: Notch
         balance:
           type: integer
           format: int64
