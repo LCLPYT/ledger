@@ -361,6 +361,22 @@ func VerifyInvitation(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
+// verifyCurrentPassword fetches the user's password hash and checks it against
+// the provided password. Returns false and writes the appropriate JSON error
+// response if the check fails, so the caller can return immediately.
+func verifyCurrentPassword(c *gin.Context, db *sql.DB, userID, password string) bool {
+	var passwordHash []byte
+	if err := db.QueryRow("SELECT password_hash FROM users WHERE id = $1", userID).Scan(&passwordHash); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return false
+	}
+	if err := util.VerifyPassword(passwordHash, []byte(password)); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+		return false
+	}
+	return true
+}
+
 func ChangePassword(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.ChangePasswordRequest
@@ -371,18 +387,7 @@ func ChangePassword(db *sql.DB) gin.HandlerFunc {
 
 		userID := c.GetString("userID")
 
-		var passwordHash []byte
-		err := db.QueryRow(
-			"SELECT password_hash FROM users WHERE id = $1",
-			userID,
-		).Scan(&passwordHash)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-
-		if err := util.VerifyPassword(passwordHash, []byte(req.CurrentPassword)); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"error": "current password is incorrect"})
+		if !verifyCurrentPassword(c, db, userID, req.CurrentPassword) {
 			return
 		}
 
@@ -414,6 +419,60 @@ func ChangePassword(db *sql.DB) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "password changed"})
+	}
+}
+
+func UpdateUsername(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req models.UpdateUsernameRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+
+		userID := c.GetString("userID")
+
+		if !verifyCurrentPassword(c, db, userID, req.CurrentPassword) {
+			return
+		}
+
+		if _, err := db.Exec("UPDATE users SET username = $1 WHERE id = $2", req.Username, userID); err != nil {
+			if pqErr, ok := errors.AsType[*pq.Error](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
+				c.JSON(http.StatusConflict, gin.H{"error": "username already taken"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"username": req.Username})
+	}
+}
+
+func UpdateEmail(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		var req models.UpdateEmailRequest
+		if err := c.ShouldBindJSON(&req); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
+			return
+		}
+
+		userID := c.GetString("userID")
+
+		if !verifyCurrentPassword(c, db, userID, req.CurrentPassword) {
+			return
+		}
+
+		if _, err := db.Exec("UPDATE users SET email = $1 WHERE id = $2", req.Email, userID); err != nil {
+			if pqErr, ok := errors.AsType[*pq.Error](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
+				c.JSON(http.StatusConflict, gin.H{"error": "email already taken"})
+				return
+			}
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"email": req.Email})
 	}
 }
 

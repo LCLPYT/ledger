@@ -45,6 +45,8 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	user.GET("", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUser(db))
 	user.GET("/permissions", middleware.AuthRequired(enforcer, db, perms.UserRead), handlers.GetUserPermissions(enforcer))
 	user.PUT("/password", middleware.SessionRequired(db), handlers.ChangePassword(db))
+	user.PUT("/username", middleware.SessionRequired(db), handlers.UpdateUsername(db))
+	user.PUT("/email", middleware.SessionRequired(db), handlers.UpdateEmail(db))
 
 	users := v1.Group("/users")
 	users.GET("", middleware.AuthRequired(enforcer, db, perms.UsersRead), handlers.ListUsers(db))

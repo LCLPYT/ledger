@@ -36,6 +36,16 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password"     binding:"required"`
 }
 
+type UpdateUsernameRequest struct {
+	Username        string `json:"username"         binding:"required"`
+	CurrentPassword string `json:"current_password" binding:"required"`
+}
+
+type UpdateEmailRequest struct {
+	Email           string `json:"email"            binding:"required,email"`
+	CurrentPassword string `json:"current_password" binding:"required"`
+}
+
 type AccessToken struct {
 	ID        int64     `json:"id"`
 	Name      string    `json:"name"`
