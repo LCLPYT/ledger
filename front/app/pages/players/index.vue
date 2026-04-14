@@ -2,6 +2,7 @@
   <div class="p-4 md:p-8 space-y-6">
     <div class="flex items-center justify-between">
       <h2 class="text-2xl font-semibold text-foreground">Players</h2>
+      <Button v-if="hasPermission(Perms.CoinsWrite)" @click="openAdjust(null)">Adjust by UUID</Button>
     </div>
 
     <p v-if="fetchError" class="text-sm text-destructive">{{ fetchError }}</p>
@@ -94,7 +95,11 @@
       <DialogContent class="w-80">
         <DialogHeader>
           <DialogTitle>Adjust balance</DialogTitle>
-          <p class="text-sm text-muted-foreground font-mono">{{ adjustDialog.player?.uuid }}</p>
+          <p v-if="adjustDialog.player" class="text-sm text-muted-foreground font-mono">{{ adjustDialog.player.uuid }}</p>
+          <div v-else class="space-y-1 pt-1">
+            <Label for="adj-uuid">Player UUID</Label>
+            <Input id="adj-uuid" v-model="adjustDialog.uuid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" class="font-mono text-sm" />
+          </div>
         </DialogHeader>
 
         <div class="space-y-4">
@@ -118,7 +123,7 @@
         <DialogFooter>
           <Button variant="outline" @click="adjustDialog.open = false">Cancel</Button>
           <Button
-            :disabled="!adjustDialog.amount || adjustDialog.loading"
+            :disabled="(!adjustDialog.player && !adjustDialog.uuid.trim()) || !adjustDialog.amount || adjustDialog.loading"
             @click="confirmAdjust"
           >
             {{ adjustDialog.loading ? 'Saving…' : 'Apply' }}
@@ -217,14 +222,18 @@ async function openHistory(p: Player) {
 const adjustDialog = reactive({
   open: false,
   player: null as Player | null,
+  uuid: '',
   amount: 0,
   description: '',
   loading: false,
   error: '',
 })
 
-function openAdjust(p: Player) {
+const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+function openAdjust(p: Player | null) {
   adjustDialog.player = p
+  adjustDialog.uuid = ''
   adjustDialog.amount = 0
   adjustDialog.description = ''
   adjustDialog.error = ''
@@ -232,12 +241,17 @@ function openAdjust(p: Player) {
 }
 
 async function confirmAdjust() {
-  if (!adjustDialog.player || !adjustDialog.amount) return
+  const targetUuid = adjustDialog.player?.uuid ?? adjustDialog.uuid.trim()
+  if (!targetUuid || !adjustDialog.amount) return
+  if (!adjustDialog.player && !uuidRegex.test(targetUuid)) {
+    adjustDialog.error = 'Invalid UUID format'
+    return
+  }
   adjustDialog.loading = true
   adjustDialog.error = ''
   const { player, amount, description } = adjustDialog
   try {
-    const res = await apiFetch<{ balance: number }>(`/api/v1/players/${player.uuid}/coins/adjust`, {
+    const res = await apiFetch<{ balance: number }>(`/api/v1/players/${targetUuid}/coins/adjust`, {
       method: 'POST',
       body: {
         amount,
@@ -246,9 +260,12 @@ async function confirmAdjust() {
       },
     })
     adjustDialog.open = false
-    // Update local balance
-    const found = players.value.find(p => p.id === player.id)
-    if (found) found.balance = res.balance
+    if (player) {
+      const found = players.value.find(p => p.id === player.id)
+      if (found) found.balance = res.balance
+    } else {
+      await load(true)
+    }
     toast.success(`Balance adjusted to ${res.balance.toLocaleString()}`)
   } catch (e: unknown) {
     const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to adjust balance'
