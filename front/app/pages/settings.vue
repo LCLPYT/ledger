@@ -2,62 +2,62 @@
   <div class="p-6 max-w-md">
     <h2 class="text-xl font-semibold mb-6">Settings</h2>
 
-    <Card class="mb-4">
-      <CardHeader>
-        <CardTitle>Change username</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p v-if="usernameSuccess" class="text-sm text-green-600">
-          Username updated.
-        </p>
+    <Card>
+      <CardContent class="pt-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-muted-foreground">Username</p>
+            <p class="text-sm font-medium">{{ user?.username }}</p>
+          </div>
+          <Button variant="ghost" size="icon" aria-label="Edit username" @click="openEdit('username')">
+            <Pencil class="h-4 w-4" />
+          </Button>
+        </div>
 
-        <form v-else class="space-y-4" @submit.prevent="handleUsernameSubmit">
+        <Separator />
+
+        <div class="flex items-center justify-between">
+          <div>
+            <p class="text-sm text-muted-foreground">Email</p>
+            <p class="text-sm font-medium">{{ user?.email }}</p>
+          </div>
+          <Button variant="ghost" size="icon" aria-label="Edit email" @click="openEdit('email')">
+            <Pencil class="h-4 w-4" />
+          </Button>
+        </div>
+
+        <Separator />
+
+        <Button variant="link" class="h-auto p-0 text-sm" @click="passwordOpen = true">
+          Change password
+        </Button>
+      </CardContent>
+    </Card>
+
+    <!-- Username / Email edit dialog -->
+    <Dialog :open="editTarget !== null" @update:open="val => { if (!val) closeEdit() }">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{{ editTarget === 'username' ? 'Change username' : 'Change email' }}</DialogTitle>
+        </DialogHeader>
+
+        <form class="space-y-4" @submit.prevent="handleEditSubmit">
           <div class="space-y-1">
-            <Label for="new-username">New username</Label>
+            <Label :for="editTarget === 'username' ? 'edit-username' : 'edit-email'">
+              {{ editTarget === 'username' ? 'New username' : 'New email' }}
+            </Label>
             <Input
-              id="new-username"
-              v-model="usernameForm.username"
+              v-if="editTarget === 'username'"
+              id="edit-username"
+              v-model="editForm.value"
               type="text"
               autocomplete="username"
               required
             />
-          </div>
-
-          <div class="space-y-1">
-            <Label for="username-password">Current password</Label>
             <Input
-              id="username-password"
-              v-model="usernameForm.password"
-              type="password"
-              autocomplete="current-password"
-              required
-            />
-          </div>
-
-          <p v-if="usernameError" class="text-sm text-destructive">{{ usernameError }}</p>
-
-          <Button type="submit" :disabled="usernameLoading" class="w-full">
-            {{ usernameLoading ? 'Saving…' : 'Change username' }}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
-
-    <Card class="mb-4">
-      <CardHeader>
-        <CardTitle>Change email</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p v-if="emailSuccess" class="text-sm text-green-600">
-          Email updated.
-        </p>
-
-        <form v-else class="space-y-4" @submit.prevent="handleEmailSubmit">
-          <div class="space-y-1">
-            <Label for="new-email">New email</Label>
-            <Input
-              id="new-email"
-              v-model="emailForm.email"
+              v-else
+              id="edit-email"
+              v-model="editForm.value"
               type="email"
               autocomplete="email"
               required
@@ -65,41 +65,46 @@
           </div>
 
           <div class="space-y-1">
-            <Label for="email-password">Current password</Label>
+            <Label for="edit-password">Current password</Label>
             <Input
-              id="email-password"
-              v-model="emailForm.password"
+              id="edit-password"
+              v-model="editForm.password"
               type="password"
               autocomplete="current-password"
               required
             />
           </div>
 
-          <p v-if="emailError" class="text-sm text-destructive">{{ emailError }}</p>
+          <p v-if="editError" class="text-sm text-destructive">{{ editError }}</p>
 
-          <Button type="submit" :disabled="emailLoading" class="w-full">
-            {{ emailLoading ? 'Saving…' : 'Change email' }}
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="outline" @click="closeEdit">Cancel</Button>
+            <Button type="submit" :disabled="editLoading">
+              {{ editLoading ? 'Saving…' : 'Save' }}
+            </Button>
+          </DialogFooter>
         </form>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
 
-    <Card>
-      <CardHeader>
-        <CardTitle>Change password</CardTitle>
-        <CardDescription>You will be signed out after changing your password.</CardDescription>
-      </CardHeader>
-      <CardContent>
-        <p v-if="success" class="text-sm text-green-600">
+    <!-- Password change dialog -->
+    <Dialog :open="passwordOpen" @update:open="val => { if (!val) closePassword() }">
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Change password</DialogTitle>
+          <DialogDescription>You will be signed out after changing your password.</DialogDescription>
+        </DialogHeader>
+
+        <div v-if="passwordSuccess" class="text-sm text-green-600">
           Password changed. Signing out…
-        </p>
+        </div>
 
-        <form v-else class="space-y-4" @submit.prevent="handleSubmit">
+        <form v-else class="space-y-4" @submit.prevent="handlePasswordSubmit">
           <div class="space-y-1">
-            <Label for="current">Current password</Label>
+            <Label for="pw-current">Current password</Label>
             <Input
-              id="current"
-              v-model="form.current"
+              id="pw-current"
+              v-model="passwordForm.current"
               type="password"
               autocomplete="current-password"
               required
@@ -107,10 +112,10 @@
           </div>
 
           <div class="space-y-1">
-            <Label for="new">New password</Label>
+            <Label for="pw-new">New password</Label>
             <Input
-              id="new"
-              v-model="form.newPassword"
+              id="pw-new"
+              v-model="passwordForm.newPassword"
               type="password"
               autocomplete="new-password"
               required
@@ -118,111 +123,124 @@
           </div>
 
           <div class="space-y-1">
-            <Label for="confirm">Confirm new password</Label>
+            <Label for="pw-confirm">Confirm new password</Label>
             <Input
-              id="confirm"
-              v-model="form.confirm"
+              id="pw-confirm"
+              v-model="passwordForm.confirm"
               type="password"
               autocomplete="new-password"
               required
             />
           </div>
 
-          <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+          <p v-if="passwordError" class="text-sm text-destructive">{{ passwordError }}</p>
 
-          <Button type="submit" :disabled="loading" class="w-full">
-            {{ loading ? 'Saving…' : 'Change password' }}
-          </Button>
+          <DialogFooter>
+            <Button type="button" variant="outline" @click="closePassword">Cancel</Button>
+            <Button type="submit" :disabled="passwordLoading">
+              {{ passwordLoading ? 'Saving…' : 'Change password' }}
+            </Button>
+          </DialogFooter>
         </form>
-      </CardContent>
-    </Card>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Pencil } from 'lucide-vue-next'
+import { Card, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog'
 
 definePageMeta({
   middleware: ['auth'],
 })
 
-const { changePassword, logout, updateUsername, updateEmail } = useAuth()
+const { user, updateUsername, updateEmail, changePassword, logout } = useAuth()
 const { validatePassword } = usePasswordPolicy()
 
-const usernameForm = reactive({ username: '', password: '' })
-const usernameError = ref('')
-const usernameLoading = ref(false)
-const usernameSuccess = ref(false)
+// --- Profile field edit dialog ---
+type EditTarget = 'username' | 'email'
+const editTarget = ref<EditTarget | null>(null)
+const editForm = reactive({ value: '', password: '' })
+const editError = ref('')
+const editLoading = ref(false)
 
-const emailForm = reactive({ email: '', password: '' })
-const emailError = ref('')
-const emailLoading = ref(false)
-const emailSuccess = ref(false)
+function openEdit(target: EditTarget) {
+  editTarget.value = target
+  editForm.value = ''
+  editForm.password = ''
+  editError.value = ''
+}
 
-const form = reactive({ current: '', newPassword: '', confirm: '' })
-const error = ref('')
-const loading = ref(false)
-const success = ref(false)
+function closeEdit() {
+  editTarget.value = null
+}
 
-async function handleUsernameSubmit() {
-  usernameError.value = ''
-  usernameLoading.value = true
+async function handleEditSubmit() {
+  editError.value = ''
+  editLoading.value = true
   try {
-    await updateUsername(usernameForm.username, usernameForm.password)
-    usernameSuccess.value = true
-    usernameForm.username = ''
-    usernameForm.password = ''
+    if (editTarget.value === 'username') {
+      await updateUsername(editForm.value, editForm.password)
+    } else {
+      await updateEmail(editForm.value, editForm.password)
+    }
+    closeEdit()
   } catch (e: unknown) {
-    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to update username.'
-    usernameError.value = msg
+    const field = editTarget.value === 'username' ? 'username' : 'email'
+    editError.value = (e as { data?: { error?: string } })?.data?.error ?? `Failed to update ${field}.`
   } finally {
-    usernameLoading.value = false
+    editLoading.value = false
   }
 }
 
-async function handleEmailSubmit() {
-  emailError.value = ''
-  emailLoading.value = true
-  try {
-    await updateEmail(emailForm.email, emailForm.password)
-    emailSuccess.value = true
-    emailForm.email = ''
-    emailForm.password = ''
-  } catch (e: unknown) {
-    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to update email.'
-    emailError.value = msg
-  } finally {
-    emailLoading.value = false
-  }
+// --- Password change dialog ---
+const passwordOpen = ref(false)
+const passwordForm = reactive({ current: '', newPassword: '', confirm: '' })
+const passwordError = ref('')
+const passwordLoading = ref(false)
+const passwordSuccess = ref(false)
+
+function closePassword() {
+  if (passwordSuccess.value) return
+  passwordOpen.value = false
 }
 
-async function handleSubmit() {
-  error.value = ''
+async function handlePasswordSubmit() {
+  passwordError.value = ''
 
-  if (form.newPassword !== form.confirm) {
-    error.value = 'Passwords do not match.'
+  if (passwordForm.newPassword !== passwordForm.confirm) {
+    passwordError.value = 'Passwords do not match.'
     return
   }
-  const policyError = validatePassword(form.newPassword)
+  const policyError = validatePassword(passwordForm.newPassword)
   if (policyError) {
-    error.value = policyError
+    passwordError.value = policyError
     return
   }
 
-  loading.value = true
+  passwordLoading.value = true
   try {
-    await changePassword(form.current, form.newPassword)
-    success.value = true
+    await changePassword(passwordForm.current, passwordForm.newPassword)
+    passwordSuccess.value = true
     await new Promise(r => setTimeout(r, 1200))
     await logout()
   } catch (e: unknown) {
-    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to change password.'
-    error.value = msg
+    passwordError.value = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to change password.'
   } finally {
-    loading.value = false
+    passwordLoading.value = false
   }
 }
 </script>
