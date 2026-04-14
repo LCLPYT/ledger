@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"database/sql"
+	"errors"
 	"ledger/auth"
 	"ledger/models"
 	"ledger/mojang"
@@ -22,18 +23,39 @@ func validateUUID(c *gin.Context, raw string) bool {
 	return true
 }
 
+const usernameStaleDuration = 7 * 24 * time.Hour
+
 // UpsertPlayer inserts a minecraft_players row if it doesn't exist and returns the player's DB id.
-func UpsertPlayer(tx *sql.Tx, uuid string) (int64, error) {
-	_, err := tx.Exec(
-		"INSERT INTO minecraft_players (uuid) VALUES ($1) ON CONFLICT (uuid) DO NOTHING",
+// A background goroutine fetches and caches the Minecraft username whenever the cache is missing
+// or older than usernameStaleDuration.
+// db is used only for that background fetch; tx is used for the insert/select.
+func UpsertPlayer(db *sql.DB, tx *sql.Tx, uuid string) (int64, error) {
+	var id int64
+	err := tx.QueryRow(
+		"INSERT INTO minecraft_players (uuid) VALUES ($1) ON CONFLICT (uuid) DO NOTHING RETURNING id",
 		uuid,
-	)
+	).Scan(&id)
+	if errors.Is(err, sql.ErrNoRows) {
+		// Player already existed — fetch id and username cache timestamp.
+		var fetchedAt *time.Time
+		err = tx.QueryRow(
+			"SELECT id, username_fetched_at FROM minecraft_players WHERE uuid = $1", uuid,
+		).Scan(&id, &fetchedAt)
+		if err != nil {
+			return 0, err
+		}
+		if fetchedAt == nil || time.Since(*fetchedAt) > usernameStaleDuration {
+			go fetchAndCacheUsername(db, id, uuid)
+		}
+		return id, nil
+	}
 	if err != nil {
 		return 0, err
 	}
-	var id int64
-	err = tx.QueryRow("SELECT id FROM minecraft_players WHERE uuid = $1", uuid).Scan(&id)
-	return id, err
+	// New player: fetch username in background after the transaction commits.
+	// The Mojang API call takes long enough (network) that the commit will have happened.
+	go fetchAndCacheUsername(db, id, uuid)
+	return id, nil
 }
 
 // GetPlayerID returns the DB id for a minecraft UUID, or 0 if not found.
@@ -141,7 +163,7 @@ func AwardCoins(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		playerID, err := UpsertPlayer(tx, uid)
+		playerID, err := UpsertPlayer(db, tx, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -251,7 +273,7 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		playerID, err := UpsertPlayer(tx, uid)
+		playerID, err := UpsertPlayer(db, tx, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -365,23 +387,15 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-type stalePlayer struct {
-	id   int64
-	uuid string
-}
-
-func refreshUsernames(db *sql.DB, players []stalePlayer) {
-	for _, p := range players {
-		name, err := mojang.FetchUsername(p.uuid)
-		if err != nil {
-			// API unavailable or rate-limited — leave stale cache, try again next time
-			continue
-		}
-		_, _ = db.Exec(
-			`UPDATE minecraft_players SET username = NULLIF($1, ''), username_fetched_at = now() WHERE id = $2`,
-			name, p.id,
-		)
+func fetchAndCacheUsername(db *sql.DB, playerID int64, uuid string) {
+	name, err := mojang.FetchUsername(uuid)
+	if err != nil {
+		return
 	}
+	_, _ = db.Exec(
+		`UPDATE minecraft_players SET username = NULLIF($1, ''), username_fetched_at = now() WHERE id = $2`,
+		name, playerID,
+	)
 }
 
 func ListPlayers(db *sql.DB) gin.HandlerFunc {
@@ -389,7 +403,7 @@ func ListPlayers(db *sql.DB) gin.HandlerFunc {
 		limit, offset := parsePagination(c)
 
 		rows, err := db.Query(
-			`SELECT mp.id, mp.uuid, mp.username, mp.username_fetched_at, mp.created_at, COALESCE(cb.balance, 0)
+			`SELECT mp.id, mp.uuid, mp.username, mp.created_at, COALESCE(cb.balance, 0)
 			 FROM minecraft_players mp
 			 LEFT JOIN coin_balances cb ON cb.player_id = mp.id
 			 ORDER BY mp.created_at DESC LIMIT $1 OFFSET $2`,
@@ -402,27 +416,17 @@ func ListPlayers(db *sql.DB) gin.HandlerFunc {
 		defer func() { _ = rows.Close() }()
 
 		players := make([]models.MinecraftPlayer, 0)
-		var stale []stalePlayer
-		staleThreshold := time.Now().Add(-7 * 24 * time.Hour)
 		for rows.Next() {
 			var p models.MinecraftPlayer
-			var fetchedAt *time.Time
-			if err := rows.Scan(&p.ID, &p.UUID, &p.Username, &fetchedAt, &p.CreatedAt, &p.Balance); err != nil {
+			if err := rows.Scan(&p.ID, &p.UUID, &p.Username, &p.CreatedAt, &p.Balance); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 				return
-			}
-			if fetchedAt == nil || fetchedAt.Before(staleThreshold) {
-				stale = append(stale, stalePlayer{id: p.ID, uuid: p.UUID})
 			}
 			players = append(players, p)
 		}
 		if err := rows.Err(); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
-		}
-
-		if len(stale) > 0 {
-			go refreshUsernames(db, stale)
 		}
 
 		c.JSON(http.StatusOK, players)

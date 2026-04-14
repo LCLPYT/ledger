@@ -78,10 +78,49 @@ func mustCreatePlayer(t *testing.T, uuid string) int64 {
 	t.Helper()
 	tx, err := testDB.Begin()
 	require.NoError(t, err)
-	id, err := handlers.UpsertPlayer(tx, uuid)
+	id, err := handlers.UpsertPlayer(testDB, tx, uuid)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	return id
+}
+
+// ── UpsertPlayer tests ────────────────────────────────────────────────────────
+
+func TestUpsertPlayer_NewPlayer(t *testing.T) {
+	cleanDB(t)
+	tx, err := testDB.Begin()
+	require.NoError(t, err)
+	defer func() { _ = tx.Rollback() }()
+
+	id, err := handlers.UpsertPlayer(testDB, tx, "069a79f4-44e9-4726-a5be-fca90e38aaf5")
+	require.NoError(t, err)
+	assert.Greater(t, id, int64(0))
+	require.NoError(t, tx.Commit())
+
+	var count int
+	require.NoError(t, testDB.QueryRow(
+		"SELECT COUNT(*) FROM minecraft_players WHERE id = $1", id,
+	).Scan(&count))
+	assert.Equal(t, 1, count)
+}
+
+func TestUpsertPlayer_ExistingPlayerReturnsSameID(t *testing.T) {
+	cleanDB(t)
+	const playerUUID = "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+
+	tx1, err := testDB.Begin()
+	require.NoError(t, err)
+	id1, err := handlers.UpsertPlayer(testDB, tx1, playerUUID)
+	require.NoError(t, err)
+	require.NoError(t, tx1.Commit())
+
+	tx2, err := testDB.Begin()
+	require.NoError(t, err)
+	id2, err := handlers.UpsertPlayer(testDB, tx2, playerUUID)
+	require.NoError(t, err)
+	require.NoError(t, tx2.Commit())
+
+	assert.Equal(t, id1, id2)
 }
 
 func mustSetBalance(t *testing.T, playerID, balance int64) {
@@ -563,4 +602,3 @@ func TestListPlayers_Unauthorized(t *testing.T) {
 	listPlayersRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/players", "", ""))
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
-
