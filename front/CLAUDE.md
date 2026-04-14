@@ -14,14 +14,16 @@
 npm run dev       # dev server
 npm run build     # production build
 npm run generate  # static generation
+npx nuxt typecheck  # type-check without building
 ```
 
 ## shadcn components
 
 Install new components with:
 ```sh
-npx shadcn-vue@latest add <component>
+yes N | npx shadcn-vue@latest add <component>
 ```
+The `yes N` skips overwrite prompts for already-installed components.
 
 Components live in `app/components/ui/<name>/`.
 
