@@ -62,7 +62,7 @@
     <Dialog :open="historyDialog.open" @update:open="historyDialog.open = $event">
       <DialogContent class="max-w-2xl">
         <DialogHeader>
-          <DialogTitle>Transactions — {{ deleteDialog.player?.username ?? deleteDialog.player?.uuid }}</DialogTitle>
+          <DialogTitle>Transactions — {{ historyDialog.player?.username ?? historyDialog.player?.uuid }}</DialogTitle>
         </DialogHeader>
 
         <p v-if="historyDialog.error" class="text-sm text-destructive">{{ historyDialog.error }}</p>
@@ -105,7 +105,7 @@
       <DialogContent class="w-80">
         <DialogHeader>
           <DialogTitle>Adjust balance</DialogTitle>
-          <p v-if="adjustDialog.player" class="text-sm text-muted-foreground font-mono">{{ deleteDialog.player?.username ?? deleteDialog.player?.uuid }}</p>
+          <p v-if="adjustDialog.player" class="text-sm text-muted-foreground font-mono">{{ adjustDialog.player?.username ?? adjustDialog.player?.uuid }}</p>
           <div v-else class="space-y-1 pt-1">
             <Label for="adj-uuid">Player UUID</Label>
             <Input id="adj-uuid" v-model="adjustDialog.uuid" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" class="font-mono text-sm" />
