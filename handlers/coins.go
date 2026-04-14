@@ -55,6 +55,58 @@ func actorIDs(c *gin.Context) (*int64, *int64) {
 	return actorUserID, actorTokenID
 }
 
+// insertTransaction records a coin transaction row inside an open transaction.
+func insertTransaction(tx *sql.Tx, playerID, amount int64, source string, description *string, actorUserID, actorTokenID *int64) error {
+	_, err := tx.Exec(
+		`INSERT INTO coin_transactions (player_id, amount, source, description, actor_user_id, actor_token_id)
+		 VALUES ($1, $2, $3, $4, $5, $6)`,
+		playerID, amount, source, description, actorUserID, actorTokenID,
+	)
+	return err
+}
+
+// lockedBalance reads the current balance for a player with a FOR UPDATE lock.
+// Returns 0 (not an error) when no balance row exists yet.
+func lockedBalance(tx *sql.Tx, playerID int64) (int64, error) {
+	var balance int64
+	err := tx.QueryRow(
+		"SELECT balance FROM coin_balances WHERE player_id = $1 FOR UPDATE",
+		playerID,
+	).Scan(&balance)
+	if err == sql.ErrNoRows {
+		return 0, nil
+	}
+	return balance, err
+}
+
+// applyBalanceDelta upserts the coin_balances row, adding delta to the current balance.
+// delta may be positive or negative.
+func applyBalanceDelta(tx *sql.Tx, playerID, delta int64) (int64, error) {
+	var newBalance int64
+	err := tx.QueryRow(
+		`INSERT INTO coin_balances (player_id, balance, updated_at)
+		 VALUES ($1, $2, now())
+		 ON CONFLICT (player_id) DO UPDATE
+		   SET balance = coin_balances.balance + $2, updated_at = now()
+		 RETURNING balance`,
+		playerID, delta,
+	).Scan(&newBalance)
+	return newBalance, err
+}
+
+// parsePagination reads and clamps limit/offset query parameters.
+func parsePagination(c *gin.Context) (limit, offset int) {
+	limit, _ = strconv.Atoi(c.DefaultQuery("limit", "50"))
+	offset, _ = strconv.Atoi(c.DefaultQuery("offset", "0"))
+	if limit <= 0 || limit > 200 {
+		limit = 50
+	}
+	if offset < 0 {
+		offset = 0
+	}
+	return
+}
+
 func AwardCoins(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uuid := c.Param("uuid")
@@ -80,25 +132,12 @@ func AwardCoins(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		_, err = tx.Exec(
-			`INSERT INTO coin_transactions (player_id, amount, source, description, actor_user_id, actor_token_id)
-			 VALUES ($1, $2, $3, $4, $5, $6)`,
-			playerID, req.Amount, req.Source, req.Description, actorUserID, actorTokenID,
-		)
-		if err != nil {
+		if err := insertTransaction(tx, playerID, req.Amount, req.Source, req.Description, actorUserID, actorTokenID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		var newBalance int64
-		err = tx.QueryRow(
-			`INSERT INTO coin_balances (player_id, balance, updated_at)
-			 VALUES ($1, $2, now())
-			 ON CONFLICT (player_id) DO UPDATE
-			   SET balance = coin_balances.balance + $2, updated_at = now()
-			 RETURNING balance`,
-			playerID, req.Amount,
-		).Scan(&newBalance)
+		newBalance, err := applyBalanceDelta(tx, playerID, req.Amount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -142,39 +181,22 @@ func SpendCoins(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		var currentBalance int64
-		err = tx.QueryRow(
-			"SELECT balance FROM coin_balances WHERE player_id = $1 FOR UPDATE",
-			playerID,
-		).Scan(&currentBalance)
-		if err == sql.ErrNoRows {
-			currentBalance = 0
-		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-
-		if currentBalance < req.Amount {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "insufficient_balance"})
-			return
-		}
-
-		_, err = tx.Exec(
-			`INSERT INTO coin_transactions (player_id, amount, source, description, actor_user_id, actor_token_id)
-			 VALUES ($1, $2, $3, $4, $5, $6)`,
-			playerID, -req.Amount, req.Source, req.Description, actorUserID, actorTokenID,
-		)
+		current, err := lockedBalance(tx, playerID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
+		if current < req.Amount {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "insufficient_balance"})
+			return
+		}
 
-		var newBalance int64
-		err = tx.QueryRow(
-			`UPDATE coin_balances SET balance = balance - $1, updated_at = now()
-			 WHERE player_id = $2 RETURNING balance`,
-			req.Amount, playerID,
-		).Scan(&newBalance)
+		if err := insertTransaction(tx, playerID, -req.Amount, req.Source, req.Description, actorUserID, actorTokenID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		newBalance, err := applyBalanceDelta(tx, playerID, -req.Amount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -214,42 +236,22 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var currentBalance int64
-		err = tx.QueryRow(
-			"SELECT balance FROM coin_balances WHERE player_id = $1 FOR UPDATE",
-			playerID,
-		).Scan(&currentBalance)
-		if err == sql.ErrNoRows {
-			currentBalance = 0
-		} else if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-
-		if currentBalance+req.Amount < 0 {
-			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "insufficient_balance"})
-			return
-		}
-
-		_, err = tx.Exec(
-			`INSERT INTO coin_transactions (player_id, amount, source, description, actor_user_id, actor_token_id)
-			 VALUES ($1, $2, $3, $4, $5, $6)`,
-			playerID, req.Amount, req.Source, req.Description, actorUserID, actorTokenID,
-		)
+		current, err := lockedBalance(tx, playerID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
+		if current+req.Amount < 0 {
+			c.JSON(http.StatusUnprocessableEntity, gin.H{"error": "insufficient_balance"})
+			return
+		}
 
-		var newBalance int64
-		err = tx.QueryRow(
-			`INSERT INTO coin_balances (player_id, balance, updated_at)
-			 VALUES ($1, $2, now())
-			 ON CONFLICT (player_id) DO UPDATE
-			   SET balance = coin_balances.balance + $2, updated_at = now()
-			 RETURNING balance`,
-			playerID, req.Amount,
-		).Scan(&newBalance)
+		if err := insertTransaction(tx, playerID, req.Amount, req.Source, req.Description, actorUserID, actorTokenID); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		newBalance, err := applyBalanceDelta(tx, playerID, req.Amount)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -291,15 +293,7 @@ func GetPlayerCoins(db *sql.DB) gin.HandlerFunc {
 func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uuid := c.Param("uuid")
-
-		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-		if limit <= 0 || limit > 200 {
-			limit = 50
-		}
-		if offset < 0 {
-			offset = 0
-		}
+		limit, offset := parsePagination(c)
 
 		playerID, err := GetPlayerID(db, uuid)
 		if err != nil {
@@ -346,14 +340,7 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 
 func ListPlayers(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		limit, _ := strconv.Atoi(c.DefaultQuery("limit", "50"))
-		offset, _ := strconv.Atoi(c.DefaultQuery("offset", "0"))
-		if limit <= 0 || limit > 200 {
-			limit = 50
-		}
-		if offset < 0 {
-			offset = 0
-		}
+		limit, offset := parsePagination(c)
 
 		rows, err := db.Query(
 			`SELECT mp.id, mp.uuid, mp.created_at, COALESCE(cb.balance, 0)
