@@ -3,6 +3,7 @@
     <div class="flex items-center justify-between">
       <h2 class="text-2xl font-semibold text-foreground">Players</h2>
       <Button v-if="hasPermission(Perms.CoinsWrite)" @click="openAdjust(null)">Adjust by UUID</Button>
+      <Button v-if="hasPermission(Perms.CoinsWrite)" @click="openAdjustByName">Adjust by name</Button>
     </div>
 
     <p v-if="fetchError" class="text-sm text-destructive">{{ fetchError }}</p>
@@ -141,6 +142,46 @@
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <!-- Adjust by name dialog -->
+    <Dialog :open="adjustByNameDialog.open" @update:open="adjustByNameDialog.open = $event">
+      <DialogContent class="w-80">
+        <DialogHeader>
+          <DialogTitle>Adjust balance by name</DialogTitle>
+          <div class="space-y-1 pt-1">
+            <Label for="abn-name">Player name</Label>
+            <Input id="abn-name" v-model="adjustByNameDialog.name" placeholder="e.g. Notch" />
+          </div>
+        </DialogHeader>
+
+        <div class="space-y-4">
+          <div class="space-y-1">
+            <Label for="abn-amount">Amount</Label>
+            <Input
+              id="abn-amount"
+              v-model.number="adjustByNameDialog.amount"
+              type="number"
+              placeholder="e.g. 100 or -50"
+            />
+            <p class="text-xs text-muted-foreground">Positive to add, negative to deduct.</p>
+          </div>
+          <div class="space-y-1">
+            <Label for="abn-desc">Description (optional)</Label>
+            <Input id="abn-desc" v-model="adjustByNameDialog.description" placeholder="Reason…" />
+          </div>
+          <p v-if="adjustByNameDialog.error" class="text-sm text-destructive">{{ adjustByNameDialog.error }}</p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="adjustByNameDialog.open = false">Cancel</Button>
+          <Button
+            :disabled="!adjustByNameDialog.name.trim() || !adjustByNameDialog.amount || adjustByNameDialog.loading"
+            @click="confirmAdjustByName"
+          >
+            {{ adjustByNameDialog.loading ? 'Saving…' : 'Apply' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     <!-- Delete player dialog -->
     <Dialog :open="deleteDialog.open" @update:open="deleteDialog.open = $event">
       <DialogContent class="w-80">
@@ -258,6 +299,55 @@ const adjustDialog = reactive({
   loading: false,
   error: '',
 })
+
+// Adjust by name dialog
+const adjustByNameDialog = reactive({
+  open: false,
+  name: '',
+  amount: 0,
+  description: '',
+  loading: false,
+  error: '',
+})
+
+function openAdjustByName() {
+  adjustByNameDialog.name = ''
+  adjustByNameDialog.amount = 0
+  adjustByNameDialog.description = ''
+  adjustByNameDialog.error = ''
+  adjustByNameDialog.open = true
+}
+
+async function confirmAdjustByName() {
+  const name = adjustByNameDialog.name.trim()
+  if (!name || !adjustByNameDialog.amount) return
+  adjustByNameDialog.loading = true
+  adjustByNameDialog.error = ''
+  try {
+    const { uuid } = await apiFetch<{ uuid: string }>(
+      `/api/v1/players/lookup?name=${encodeURIComponent(name)}`
+    )
+    const res = await apiFetch<{ balance: number }>(`/api/v1/players/${uuid}/coins/adjust`, {
+      method: 'POST',
+      body: {
+        amount: adjustByNameDialog.amount,
+        source: 'admin',
+        description: adjustByNameDialog.description.trim() || undefined,
+      },
+    })
+    adjustByNameDialog.open = false
+    await load(true)
+    toast.success(`Balance adjusted to ${res.balance.toLocaleString()}`)
+  } catch (e: unknown) {
+    const msg = (e as { data?: { error?: string } })?.data?.error ?? 'Failed to adjust balance'
+    adjustByNameDialog.error =
+      msg === 'player not found' ? 'Player not found on Mojang' :
+      msg === 'insufficient_balance' ? 'Insufficient balance' : msg
+    toast.error(adjustByNameDialog.error)
+  } finally {
+    adjustByNameDialog.loading = false
+  }
+}
 
 // Delete player dialog
 const deleteDialog = reactive({
