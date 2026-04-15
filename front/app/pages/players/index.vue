@@ -2,8 +2,10 @@
   <div class="p-4 md:p-8 space-y-6">
     <div class="flex items-center justify-between">
       <h2 class="text-2xl font-semibold text-foreground">Players</h2>
-      <Button v-if="hasPermission(Perms.CoinsWrite)" @click="openAdjust(null)">Adjust by UUID</Button>
-      <Button v-if="hasPermission(Perms.CoinsWrite)" @click="openAdjustByName">Adjust by name</Button>
+      <div class="flex gap-2">
+        <Button v-if="hasPermission(Perms.CoinsWrite)" @click="openAdjust(null)">Adjust by UUID</Button>
+        <Button v-if="hasPermission(Perms.CoinsWrite)" @click="openAdjustByName">Adjust by name</Button>
+      </div>
     </div>
 
     <p v-if="fetchError" class="text-sm text-destructive">{{ fetchError }}</p>
