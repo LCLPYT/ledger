@@ -10,6 +10,7 @@ import (
 
 	"ledger/auth"
 	appdb "ledger/db"
+	"ledger/handlers"
 
 	"github.com/casbin/casbin/v2"
 	"golang.org/x/crypto/bcrypt"
@@ -21,6 +22,10 @@ var (
 )
 
 func TestMain(m *testing.M) {
+	// Prevent tests from making real Mojang API calls.
+	handlers.FetchUsername = func(string) (string, error) { return "", nil }
+	handlers.FetchUUIDByName = func(string) (string, error) { return "", nil }
+
 	dsn := os.Getenv("DATABASE_URL")
 
 	if dsn == "" {
@@ -37,7 +42,7 @@ func TestMain(m *testing.M) {
 
 func cleanDB(t *testing.T) {
 	t.Helper()
-	_, err := testDB.Exec("TRUNCATE access_tokens, sessions, users, user_invitations, roles RESTART IDENTITY CASCADE")
+	_, err := testDB.Exec("TRUNCATE access_tokens, sessions, users, user_invitations, roles, coin_transactions, coin_balances, minecraft_players RESTART IDENTITY CASCADE")
 	if err != nil {
 		t.Fatalf("cleanDB: %v", err)
 	}

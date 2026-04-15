@@ -75,7 +75,7 @@
 </template>
 
 <script setup lang="ts">
-import { LayoutDashboard, Users, Shield, KeyRound, Settings, Menu } from 'lucide-vue-next'
+import { LayoutDashboard, Users, Shield, KeyRound, Settings, Menu, Coins } from 'lucide-vue-next'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 
@@ -92,6 +92,7 @@ const ALL_NAV_ITEMS = [
   { to: '/',         label: 'Dashboard', icon: LayoutDashboard, permission: null },
   { to: '/users',    label: 'Users',     icon: Users,           permission: Perms.UsersRead },
   { to: '/roles',    label: 'Roles',     icon: Shield,          permission: Perms.RolesRead },
+  { to: '/players',  label: 'Players',   icon: Coins,           permission: Perms.CoinsRead },
   { to: '/tokens',   label: 'Tokens',    icon: KeyRound,        permission: Perms.UserCreateToken },
   { to: '/settings', label: 'Settings',  icon: Settings,        permission: null },
 ]
