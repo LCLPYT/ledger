@@ -68,12 +68,12 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	minecraft := v1.Group("/minecraft")
 
 	players := minecraft.Group("/players")
-	players.GET("", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.ListPlayers(db))
-	players.GET("/lookup", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.LookupPlayerByName(db))
+	players.GET("", middleware.AuthRequired(enforcer, db, perms.PlayerRead), handlers.ListPlayers(db))
+	players.GET("/lookup", middleware.AuthRequired(enforcer, db, perms.PlayerWrite), handlers.LookupPlayerByName(db))
 
 	player := players.Group("/:uuid")
-	player.GET("", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.GetPlayer(db))
-	player.DELETE("", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.DeletePlayer(db))
+	player.GET("", middleware.AuthRequired(enforcer, db, perms.PlayerWrite), handlers.GetPlayer(db))
+	player.DELETE("", middleware.AuthRequired(enforcer, db, perms.PlayerWrite), handlers.DeletePlayer(db))
 
 	coins := player.Group("/coins")
 	coins.GET("", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.GetPlayerCoins(db))

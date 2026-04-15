@@ -3,8 +3,8 @@
     <div class="flex items-center justify-between">
       <h2 class="text-2xl font-semibold text-foreground">Players</h2>
       <div class="flex gap-2">
-        <Button v-if="hasPermission(Perms.CoinsWrite)" @click="openAddByUUID">Add by UUID</Button>
-        <Button v-if="hasPermission(Perms.CoinsWrite)" @click="openAddByName">Add by name</Button>
+        <Button v-if="hasPermission(Perms.PlayerWrite)" @click="openAddByUUID">Add by UUID</Button>
+        <Button v-if="hasPermission(Perms.PlayerWrite)" @click="openAddByName">Add by name</Button>
       </div>
     </div>
 
@@ -33,7 +33,7 @@
                     <NuxtLink :to="`/players/${p.uuid}`">Manage</NuxtLink>
                   </Button>
                   <Button
-                    v-if="hasPermission(Perms.CoinsWrite)"
+                    v-if="hasPermission(Perms.PlayerWrite)"
                     variant="ghost"
                     size="sm"
                     class="text-destructive hover:text-destructive"
