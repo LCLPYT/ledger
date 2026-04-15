@@ -29,12 +29,21 @@ func queryPlayer(db *sql.DB, uid string) (models.MinecraftPlayer, *time.Time, er
 func ListPlayers(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limit, offset := util.ParsePagination(c)
+		search := strings.TrimSpace(c.Query("search"))
 
 		rows, err := db.Query(
 			`SELECT id, uuid, username, created_at
 			 FROM minecraft_players
-			 ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
-			limit, offset,
+			 WHERE ($1 = ''
+			        OR LOWER(username) LIKE '%' || LOWER($1) || '%'
+			        OR LOWER(uuid::text) = LOWER($1))
+			 ORDER BY
+			   CASE WHEN $1 = '' THEN 0 ELSE 1 END,
+			   CASE WHEN LOWER(uuid::text) = LOWER($1) THEN 0 ELSE 1 END,
+			   similarity(username, $1) DESC,
+			   created_at DESC
+			 LIMIT $2 OFFSET $3`,
+			search, limit, offset,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})

@@ -513,6 +513,12 @@ paths:
     get:
       summary: List Minecraft players
       parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Filter by username (substring) or exact UUID. Results ranked by similarity.
+          example: Notch
         - name: limit
           in: query
           schema:
