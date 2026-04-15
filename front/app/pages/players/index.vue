@@ -8,6 +8,13 @@
       </div>
     </div>
 
+    <Input
+      v-model="search"
+      placeholder="Search by name or UUID…"
+      class="max-w-sm"
+      @input="onSearchInput"
+    />
+
     <p v-if="fetchError" class="text-sm text-destructive">{{ fetchError }}</p>
 
     <template v-else>
@@ -142,6 +149,13 @@ const limit = 50
 const players = ref<Player[]>([])
 const fetchError = ref('')
 const offset = ref(0)
+const search = ref('')
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+
+function onSearchInput() {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => load(true), 300)
+}
 
 async function load(reset = false) {
   if (reset) {
@@ -149,7 +163,9 @@ async function load(reset = false) {
     players.value = []
   }
   try {
-    const page = await apiFetch<Player[]>(`/api/v1/minecraft/players?limit=${limit}&offset=${offset.value}`)
+    const url = `/api/v1/minecraft/players?limit=${limit}&offset=${offset.value}` +
+      (search.value ? `&search=${encodeURIComponent(search.value)}` : '')
+    const page = await apiFetch<Player[]>(url)
     players.value = reset ? page : [...players.value, ...page]
     offset.value += page.length
   } catch {
