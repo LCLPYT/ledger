@@ -15,7 +15,7 @@ var FetchUsername = mojang.FetchUsername
 // It can be replaced in tests to avoid real network calls.
 var FetchUUIDByName = mojang.FetchUUIDByName
 
-const usernameStaleDuration = 7 * 24 * time.Hour
+const UsernameStaleDuration = 7 * 24 * time.Hour
 
 // UpsertPlayer inserts a minecraft_players row if it doesn't exist and returns the player's DB id.
 // A background goroutine fetches and caches the Minecraft username whenever the cache is missing
@@ -39,7 +39,7 @@ func UpsertPlayer(db *sql.DB, tx *sql.Tx, uuid string) (int64, error) {
 		if err != nil {
 			return 0, err
 		}
-		if fetchedAt == nil || time.Since(*fetchedAt) > usernameStaleDuration {
+		if fetchedAt == nil || time.Since(*fetchedAt) > UsernameStaleDuration {
 			go fetchAndCacheUsername(db, id, uuid)
 		}
 		return id, nil
