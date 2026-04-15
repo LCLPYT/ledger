@@ -7,7 +7,6 @@ type MinecraftPlayer struct {
 	UUID      string    `json:"uuid"`
 	Username  *string   `json:"username"`
 	CreatedAt time.Time `json:"created_at"`
-	Balance   int64     `json:"balance"`
 }
 
 type CoinTransaction struct {

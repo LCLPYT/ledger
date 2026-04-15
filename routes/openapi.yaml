@@ -511,7 +511,7 @@ paths:
 
   /api/v1/minecraft/players:
     get:
-      summary: List Minecraft mc with their coin balances
+      summary: List Minecraft players
       parameters:
         - name: limit
           in: query
@@ -526,7 +526,7 @@ paths:
             default: 0
       responses:
         "200":
-          description: List of mc
+          description: List of players
           content:
             application/json:
               schema:
@@ -538,7 +538,52 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
+  /api/v1/minecraft/players/lookup:
+    get:
+      summary: Resolve a Minecraft username to a player (1-hour cache, then Mojang API)
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+          example: Notch
+      responses:
+        "200":
+          description: Resolved player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinecraftPlayer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/minecraft/players/{uuid}:
+    get:
+      summary: Get a player by UUID (auto-creates if valid Mojang UUID)
+      parameters:
+        - $ref: "#/components/parameters/PlayerUUID"
+      responses:
+        "200":
+          description: Player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinecraftPlayer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     delete:
       summary: Delete a player and all their coin data
       parameters:
@@ -988,10 +1033,6 @@ components:
           type: string
           nullable: true
           example: Notch
-        balance:
-          type: integer
-          format: int64
-          example: 1500
         created_at:
           type: string
           format: date-time

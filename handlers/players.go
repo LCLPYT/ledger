@@ -8,19 +8,32 @@ import (
 	"ledger/util"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+// queryPlayer fetches a player row by UUID.
+// Returns sql.ErrNoRows if the player doesn't exist.
+func queryPlayer(db *sql.DB, uid string) (models.MinecraftPlayer, *time.Time, error) {
+	var p models.MinecraftPlayer
+	var fetchedAt *time.Time
+	err := db.QueryRow(
+		`SELECT id, uuid, username, created_at, username_fetched_at
+		 FROM minecraft_players WHERE uuid = $1`,
+		uid,
+	).Scan(&p.ID, &p.UUID, &p.Username, &p.CreatedAt, &fetchedAt)
+	return p, fetchedAt, err
+}
 
 func ListPlayers(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		limit, offset := util.ParsePagination(c)
 
 		rows, err := db.Query(
-			`SELECT mp.id, mp.uuid, mp.username, mp.created_at, COALESCE(cb.balance, 0)
-			 FROM minecraft_players mp
-			 LEFT JOIN coin_balances cb ON cb.player_id = mp.id
-			 ORDER BY mp.created_at DESC LIMIT $1 OFFSET $2`,
+			`SELECT id, uuid, username, created_at
+			 FROM minecraft_players
+			 ORDER BY created_at DESC LIMIT $1 OFFSET $2`,
 			limit, offset,
 		)
 		if err != nil {
@@ -32,7 +45,7 @@ func ListPlayers(db *sql.DB) gin.HandlerFunc {
 		players := make([]models.MinecraftPlayer, 0)
 		for rows.Next() {
 			var p models.MinecraftPlayer
-			if err := rows.Scan(&p.ID, &p.UUID, &p.Username, &p.CreatedAt, &p.Balance); err != nil {
+			if err := rows.Scan(&p.ID, &p.UUID, &p.Username, &p.CreatedAt); err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 				return
 			}
@@ -54,19 +67,51 @@ func GetPlayer(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var p models.MinecraftPlayer
-		err := db.QueryRow(
-			`SELECT id, uuid, username, created_at,
-			FROM minecraft_players WHERE uuid = $1`,
-			uid,
-		).Scan(&p.ID, &p.UUID, &p.Username, &p.CreatedAt)
-
-		// TODO handle error and return player json
-		// TODO if uuid doesn't exist in the database, fetch from mojang
-		// TODO if username is stale, trigger fetch in the background
-
-		if err != nil { /*todo*/
+		p, fetchedAt, err := queryPlayer(db, uid)
+		if errors.Is(err, sql.ErrNoRows) {
+			// Not in DB: verify via Mojang and create the player if they exist.
+			username, err := mc.FetchUsername(uid)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch player"})
+				return
+			}
+			if username == "" {
+				c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
+				return
+			}
+			_, err = db.Exec(
+				`INSERT INTO minecraft_players (uuid, username, username_fetched_at)
+				 VALUES ($1, $2, now())
+				 ON CONFLICT (uuid) DO UPDATE
+				   SET username = EXCLUDED.username, username_fetched_at = now()`,
+				uid, username,
+			)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+				return
+			}
+			p, _, err = queryPlayer(db, uid)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+				return
+			}
+		} else if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		} else if fetchedAt == nil || time.Since(*fetchedAt) > mc.UsernameStaleDuration {
+			go func() {
+				name, err := mc.FetchUsername(uid)
+				if err != nil {
+					return
+				}
+				_, _ = db.Exec(
+					`UPDATE minecraft_players SET username = NULLIF($1, ''), username_fetched_at = now() WHERE uuid = $2`,
+					name, uid,
+				)
+			}()
 		}
+
+		c.JSON(http.StatusOK, p)
 	}
 }
 
@@ -122,8 +167,12 @@ func LookupPlayerByName(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		// TODO should return whole player json
-		c.JSON(http.StatusOK, gin.H{"uuid": mojangUUID})
+		p, _, err := queryPlayer(db, mojangUUID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+		c.JSON(http.StatusOK, p)
 	}
 }
 
