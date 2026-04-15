@@ -68,7 +68,7 @@ func listPlayersRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/api/v1/minecraft/players",
-		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsRead),
+		middleware.AuthRequired(testEnforcer, testDB, perms.PlayerRead),
 		handlers.ListPlayers(testDB))
 	return r
 }
@@ -551,17 +551,15 @@ func TestGetPlayerTransactions_Pagination(t *testing.T) {
 func TestListPlayers_ReturnsList(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPermission(t, userID, perms.CoinsRead)
-	token := mustCreateToken(t, userID, []string{perms.CoinsRead})
+	mustAddPermission(t, userID, perms.PlayerRead)
+	token := mustCreateToken(t, userID, []string{perms.PlayerRead})
 
 	uuids := []string{
 		"069a79f4-44e9-4726-a5be-fca90e38aaf5",
 		"853c80ef-3a6e-4d29-b5a9-a7dc12a4c0ca",
 	}
-	balances := []int64{100, 250}
-	for i, uuid := range uuids {
-		pid := mustCreatePlayer(t, uuid)
-		mustSetBalance(t, pid, balances[i])
+	for _, uuid := range uuids {
+		mustCreatePlayer(t, uuid)
 	}
 
 	w := httptest.NewRecorder()
@@ -572,21 +570,20 @@ func TestListPlayers_ReturnsList(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&players))
 	assert.Len(t, players, 2)
 
-	// Verify both UUIDs and their balances appear
-	found := map[string]int64{}
+	found := map[string]bool{}
 	for _, p := range players {
-		found[p.UUID] = p.Balance
+		found[p.UUID] = true
 	}
-	for i, uuid := range uuids {
-		assert.Equal(t, balances[i], found[uuid], "balance mismatch for %s", uuid)
+	for _, uuid := range uuids {
+		assert.True(t, found[uuid], "uuid %s missing from response", uuid)
 	}
 }
 
 func TestListPlayers_Empty(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
-	mustAddPermission(t, userID, perms.CoinsRead)
-	token := mustCreateToken(t, userID, []string{perms.CoinsRead})
+	mustAddPermission(t, userID, perms.PlayerRead)
+	token := mustCreateToken(t, userID, []string{perms.PlayerRead})
 
 	w := httptest.NewRecorder()
 	listPlayersRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/minecraft/players", token, ""))
