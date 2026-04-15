@@ -4,12 +4,12 @@ import (
 	"database/sql"
 	"errors"
 	"ledger/auth"
+	"ledger/mc"
 	"ledger/models"
-	"ledger/mojang"
+	"ledger/util"
 	"net/http"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -22,51 +22,6 @@ func validateUUID(c *gin.Context, raw string) bool {
 		return false
 	}
 	return true
-}
-
-const usernameStaleDuration = 7 * 24 * time.Hour
-
-// UpsertPlayer inserts a minecraft_players row if it doesn't exist and returns the player's DB id.
-// A background goroutine fetches and caches the Minecraft username whenever the cache is missing
-// or older than usernameStaleDuration.
-// db is used only for that background fetch; tx is used for the insert/select.
-func UpsertPlayer(db *sql.DB, tx *sql.Tx, uuid string) (int64, error) {
-	var id int64
-	err := tx.QueryRow(
-		"INSERT INTO minecraft_players (uuid) VALUES ($1) ON CONFLICT (uuid) DO NOTHING RETURNING id",
-		uuid,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
-		// Player already existed — fetch id and username cache timestamp.
-		var fetchedAt *time.Time
-		err = tx.QueryRow(
-			"SELECT id, username_fetched_at FROM minecraft_players WHERE uuid = $1", uuid,
-		).Scan(&id, &fetchedAt)
-		if err != nil {
-			return 0, err
-		}
-		if fetchedAt == nil || time.Since(*fetchedAt) > usernameStaleDuration {
-			go fetchAndCacheUsername(db, id, uuid)
-		}
-		return id, nil
-	}
-	if err != nil {
-		return 0, err
-	}
-	// New player: fetch username in background after the transaction commits.
-	// The Mojang API call takes long enough (network) that the commit will have happened.
-	go fetchAndCacheUsername(db, id, uuid)
-	return id, nil
-}
-
-// GetPlayerID returns the DB id for a minecraft UUID, or 0 if not found.
-func GetPlayerID(db *sql.DB, uuid string) (int64, error) {
-	var id int64
-	err := db.QueryRow("SELECT id FROM minecraft_players WHERE uuid = $1", uuid).Scan(&id)
-	if err == sql.ErrNoRows {
-		return 0, nil
-	}
-	return id, err
 }
 
 // actorIDs extracts the Ledger user id and access token id (if applicable) from the gin context.
@@ -108,7 +63,7 @@ func lockedBalance(tx *sql.Tx, playerID int64) (int64, error) {
 		"SELECT balance FROM coin_balances WHERE player_id = $1 FOR UPDATE",
 		playerID,
 	).Scan(&balance)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
 	return balance, err
@@ -127,19 +82,6 @@ func applyBalanceDelta(tx *sql.Tx, playerID, delta int64) (int64, error) {
 		playerID, delta,
 	).Scan(&newBalance)
 	return newBalance, err
-}
-
-// parsePagination reads and clamps limit/offset query parameters.
-func parsePagination(c *gin.Context) (limit, offset int) {
-	limit, _ = strconv.Atoi(c.DefaultQuery("limit", "50"))
-	offset, _ = strconv.Atoi(c.DefaultQuery("offset", "0"))
-	if limit <= 0 || limit > 200 {
-		limit = 50
-	}
-	if offset < 0 {
-		offset = 0
-	}
-	return
 }
 
 func AwardCoins(db *sql.DB) gin.HandlerFunc {
@@ -164,7 +106,7 @@ func AwardCoins(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		playerID, err := UpsertPlayer(db, tx, uid)
+		playerID, err := mc.UpsertPlayer(db, tx, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -205,7 +147,7 @@ func SpendCoins(db *sql.DB) gin.HandlerFunc {
 
 		actorUserID, actorTokenID := actorIDs(c)
 
-		playerID, err := GetPlayerID(db, uid)
+		playerID, err := mc.GetPlayerID(db, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -274,7 +216,7 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		playerID, err := UpsertPlayer(db, tx, uid)
+		playerID, err := mc.UpsertPlayer(db, tx, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -363,9 +305,9 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 		if !validateUUID(c, uid) {
 			return
 		}
-		limit, offset := parsePagination(c)
+		limit, offset := util.ParsePagination(c)
 
-		playerID, err := GetPlayerID(db, uid)
+		playerID, err := mc.GetPlayerID(db, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -408,25 +350,6 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-// FetchUsername is the function used to resolve a Minecraft UUID to a username.
-// It can be replaced in tests to avoid real network calls.
-var FetchUsername = mojang.FetchUsername
-
-// FetchUUIDByName is the function used to resolve a Minecraft username to a UUID.
-// It can be replaced in tests to avoid real network calls.
-var FetchUUIDByName = mojang.FetchUUIDByName
-
-func fetchAndCacheUsername(db *sql.DB, playerID int64, uuid string) {
-	name, err := FetchUsername(uuid)
-	if err != nil {
-		return
-	}
-	_, _ = db.Exec(
-		`UPDATE minecraft_players SET username = NULLIF($1, ''), username_fetched_at = now() WHERE id = $2`,
-		name, playerID,
-	)
-}
-
 // LookupPlayerByName resolves a Minecraft username to a UUID.
 // It checks the minecraft_players cache first (valid for 1 hour), then falls back to the Mojang API.
 func LookupPlayerByName(db *sql.DB) gin.HandlerFunc {
@@ -449,13 +372,13 @@ func LookupPlayerByName(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusOK, gin.H{"uuid": cachedUUID})
 			return
 		}
-		if err != sql.ErrNoRows {
+		if !errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
 		// Cache miss: call Mojang API
-		mojangUUID, err := FetchUUIDByName(name)
+		mojangUUID, err := mc.FetchUUIDByName(name)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve player name"})
 			return
@@ -485,7 +408,7 @@ func LookupPlayerByName(db *sql.DB) gin.HandlerFunc {
 
 func ListPlayers(db *sql.DB) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		limit, offset := parsePagination(c)
+		limit, offset := util.ParsePagination(c)
 
 		rows, err := db.Query(
 			`SELECT mp.id, mp.uuid, mp.username, mp.created_at, COALESCE(cb.balance, 0)

@@ -509,9 +509,9 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/players:
+  /api/v1/minecraft/players:
     get:
-      summary: List Minecraft players with their coin balances
+      summary: List Minecraft mc with their coin balances
       parameters:
         - name: limit
           in: query
@@ -526,7 +526,7 @@ paths:
             default: 0
       responses:
         "200":
-          description: List of players
+          description: List of mc
           content:
             application/json:
               schema:
@@ -538,7 +538,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
-  /api/v1/players/{uuid}:
+  /api/v1/minecraft/players/{uuid}:
     delete:
       summary: Delete a player and all their coin data
       parameters:
@@ -555,7 +555,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/players/{uuid}/coins:
+  /api/v1/minecraft/players/{uuid}/coins:
     get:
       summary: Get a player's current coin balance
       parameters:
@@ -585,7 +585,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/players/{uuid}/coins/transactions:
+  /api/v1/minecraft/players/{uuid}/coins/transactions:
     get:
       summary: List coin transactions for a player
       parameters:
@@ -622,7 +622,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/players/{uuid}/coins/award:
+  /api/v1/minecraft/players/{uuid}/coins/award:
     post:
       summary: Award coins to a player (auto-creates player if unknown)
       parameters:
@@ -652,7 +652,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
-  /api/v1/players/{uuid}/coins/spend:
+  /api/v1/minecraft/players/{uuid}/coins/spend:
     post:
       summary: Deduct coins from a player (fails if balance insufficient)
       parameters:
@@ -690,7 +690,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/v1/players/{uuid}/coins/adjust:
+  /api/v1/minecraft/players/{uuid}/coins/adjust:
     post:
       summary: Adjust a player's balance by a signed amount (admin)
       parameters:

@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"encoding/json"
+	"ledger/mc"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -21,7 +22,7 @@ import (
 func awardCoinsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/players/:uuid/coins/award",
+	r.POST("/api/v1/minecraft/players/:uuid/coins/award",
 		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsWrite),
 		handlers.AwardCoins(testDB))
 	return r
@@ -30,7 +31,7 @@ func awardCoinsRouter() *gin.Engine {
 func spendCoinsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/players/:uuid/coins/spend",
+	r.POST("/api/v1/minecraft/players/:uuid/coins/spend",
 		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsWrite),
 		handlers.SpendCoins(testDB))
 	return r
@@ -39,7 +40,7 @@ func spendCoinsRouter() *gin.Engine {
 func adjustCoinsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/players/:uuid/coins/adjust",
+	r.POST("/api/v1/minecraft/players/:uuid/coins/adjust",
 		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsWrite),
 		handlers.AdjustCoins(testDB))
 	return r
@@ -48,7 +49,7 @@ func adjustCoinsRouter() *gin.Engine {
 func getPlayerCoinsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/api/v1/players/:uuid/coins",
+	r.GET("/api/v1/minecraft/players/:uuid/coins",
 		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsRead),
 		handlers.GetPlayerCoins(testDB))
 	return r
@@ -57,7 +58,7 @@ func getPlayerCoinsRouter() *gin.Engine {
 func getPlayerTransactionsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/api/v1/players/:uuid/coins/transactions",
+	r.GET("/api/v1/minecraft/players/:uuid/coins/transactions",
 		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsRead),
 		handlers.GetPlayerTransactions(testDB))
 	return r
@@ -66,7 +67,7 @@ func getPlayerTransactionsRouter() *gin.Engine {
 func listPlayersRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.GET("/api/v1/players",
+	r.GET("/api/v1/minecraft/players",
 		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsRead),
 		handlers.ListPlayers(testDB))
 	return r
@@ -78,7 +79,7 @@ func mustCreatePlayer(t *testing.T, uuid string) int64 {
 	t.Helper()
 	tx, err := testDB.Begin()
 	require.NoError(t, err)
-	id, err := handlers.UpsertPlayer(testDB, tx, uuid)
+	id, err := mc.UpsertPlayer(testDB, tx, uuid)
 	require.NoError(t, err)
 	require.NoError(t, tx.Commit())
 	return id
@@ -92,7 +93,7 @@ func TestUpsertPlayer_NewPlayer(t *testing.T) {
 	require.NoError(t, err)
 	defer func() { _ = tx.Rollback() }()
 
-	id, err := handlers.UpsertPlayer(testDB, tx, "069a79f4-44e9-4726-a5be-fca90e38aaf5")
+	id, err := mc.UpsertPlayer(testDB, tx, "069a79f4-44e9-4726-a5be-fca90e38aaf5")
 	require.NoError(t, err)
 	assert.Greater(t, id, int64(0))
 	require.NoError(t, tx.Commit())
@@ -110,13 +111,13 @@ func TestUpsertPlayer_ExistingPlayerReturnsSameID(t *testing.T) {
 
 	tx1, err := testDB.Begin()
 	require.NoError(t, err)
-	id1, err := handlers.UpsertPlayer(testDB, tx1, playerUUID)
+	id1, err := mc.UpsertPlayer(testDB, tx1, playerUUID)
 	require.NoError(t, err)
 	require.NoError(t, tx1.Commit())
 
 	tx2, err := testDB.Begin()
 	require.NoError(t, err)
-	id2, err := handlers.UpsertPlayer(testDB, tx2, playerUUID)
+	id2, err := mc.UpsertPlayer(testDB, tx2, playerUUID)
 	require.NoError(t, err)
 	require.NoError(t, tx2.Commit())
 
@@ -165,7 +166,7 @@ func TestAwardCoins_NewPlayer(t *testing.T) {
 	uuid := "069a79f4-44e9-4726-a5be-fca90e38aaf5"
 	w := httptest.NewRecorder()
 	awardCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/"+uuid+"/coins/award", token,
+		http.MethodPost, "/api/v1/minecraft/players/"+uuid+"/coins/award", token,
 		`{"amount":100,"source":"minigame"}`,
 	))
 
@@ -174,7 +175,7 @@ func TestAwardCoins_NewPlayer(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 	assert.Equal(t, float64(100), resp["balance"])
 
-	playerID, err := handlers.GetPlayerID(testDB, uuid)
+	playerID, err := mc.GetPlayerID(testDB, uuid)
 	require.NoError(t, err)
 	assert.NotZero(t, playerID)
 	assert.Equal(t, int64(100), getBalance(t, playerID))
@@ -193,7 +194,7 @@ func TestAwardCoins_AccumulatesBalance(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	awardCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/"+uuid+"/coins/award", token,
+		http.MethodPost, "/api/v1/minecraft/players/"+uuid+"/coins/award", token,
 		`{"amount":100,"source":"minigame"}`,
 	))
 
@@ -208,7 +209,7 @@ func TestAwardCoins_NoToken(t *testing.T) {
 	cleanDB(t)
 	w := httptest.NewRecorder()
 	awardCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/award", "",
+		http.MethodPost, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/award", "",
 		`{"amount":100,"source":"minigame"}`,
 	))
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -222,7 +223,7 @@ func TestAwardCoins_WrongScope(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	awardCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/award", token,
+		http.MethodPost, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/award", token,
 		`{"amount":100,"source":"minigame"}`,
 	))
 	assert.Equal(t, http.StatusForbidden, w.Code)
@@ -236,7 +237,7 @@ func TestAwardCoins_InvalidAmount(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	awardCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/award", token,
+		http.MethodPost, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/award", token,
 		`{"amount":0,"source":"minigame"}`,
 	))
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -250,7 +251,7 @@ func TestAwardCoins_InvalidSource(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	awardCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/award", token,
+		http.MethodPost, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/award", token,
 		`{"amount":100,"source":"invalid"}`,
 	))
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -270,7 +271,7 @@ func TestSpendCoins_HappyPath(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	spendCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/"+uuid+"/coins/spend", token,
+		http.MethodPost, "/api/v1/minecraft/players/"+uuid+"/coins/spend", token,
 		`{"amount":25,"source":"purchase"}`,
 	))
 
@@ -294,7 +295,7 @@ func TestSpendCoins_InsufficientBalance(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	spendCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/"+uuid+"/coins/spend", token,
+		http.MethodPost, "/api/v1/minecraft/players/"+uuid+"/coins/spend", token,
 		`{"amount":20,"source":"purchase"}`,
 	))
 
@@ -314,7 +315,7 @@ func TestSpendCoins_PlayerNotFound(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	spendCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/spend", token,
+		http.MethodPost, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/spend", token,
 		`{"amount":10,"source":"purchase"}`,
 	))
 	assert.Equal(t, http.StatusNotFound, w.Code)
@@ -324,7 +325,7 @@ func TestSpendCoins_NoToken(t *testing.T) {
 	cleanDB(t)
 	w := httptest.NewRecorder()
 	spendCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/spend", "",
+		http.MethodPost, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/spend", "",
 		`{"amount":10,"source":"purchase"}`,
 	))
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -338,7 +339,7 @@ func TestSpendCoins_InvalidAmount(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	spendCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/spend", token,
+		http.MethodPost, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/spend", token,
 		`{"amount":0,"source":"purchase"}`,
 	))
 	assert.Equal(t, http.StatusBadRequest, w.Code)
@@ -355,7 +356,7 @@ func TestAdjustCoins_PositiveCreatesPlayer(t *testing.T) {
 	uuid := "069a79f4-44e9-4726-a5be-fca90e38aaf5"
 	w := httptest.NewRecorder()
 	adjustCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/"+uuid+"/coins/adjust", token,
+		http.MethodPost, "/api/v1/minecraft/players/"+uuid+"/coins/adjust", token,
 		`{"amount":50,"source":"admin"}`,
 	))
 
@@ -364,7 +365,7 @@ func TestAdjustCoins_PositiveCreatesPlayer(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 	assert.Equal(t, float64(50), resp["balance"])
 
-	playerID, err := handlers.GetPlayerID(testDB, uuid)
+	playerID, err := mc.GetPlayerID(testDB, uuid)
 	require.NoError(t, err)
 	assert.NotZero(t, playerID)
 	assert.Equal(t, int64(50), getBalance(t, playerID))
@@ -382,7 +383,7 @@ func TestAdjustCoins_NegativeDeducts(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	adjustCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/"+uuid+"/coins/adjust", token,
+		http.MethodPost, "/api/v1/minecraft/players/"+uuid+"/coins/adjust", token,
 		`{"amount":-30,"source":"admin"}`,
 	))
 
@@ -405,7 +406,7 @@ func TestAdjustCoins_WouldGoNegative(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	adjustCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/"+uuid+"/coins/adjust", token,
+		http.MethodPost, "/api/v1/minecraft/players/"+uuid+"/coins/adjust", token,
 		`{"amount":-20,"source":"admin"}`,
 	))
 
@@ -417,7 +418,7 @@ func TestAdjustCoins_NoToken(t *testing.T) {
 	cleanDB(t)
 	w := httptest.NewRecorder()
 	adjustCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodPost, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/adjust", "",
+		http.MethodPost, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/adjust", "",
 		`{"amount":50,"source":"admin"}`,
 	))
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
@@ -437,7 +438,7 @@ func TestGetPlayerCoins_Found(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	getPlayerCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodGet, "/api/v1/players/"+uuid+"/coins", token, "",
+		http.MethodGet, "/api/v1/minecraft/players/"+uuid+"/coins", token, "",
 	))
 
 	require.Equal(t, http.StatusOK, w.Code)
@@ -454,7 +455,7 @@ func TestGetPlayerCoins_NotFound(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	getPlayerCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodGet, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins", token, "",
+		http.MethodGet, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins", token, "",
 	))
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -463,7 +464,7 @@ func TestGetPlayerCoins_Unauthorized(t *testing.T) {
 	cleanDB(t)
 	w := httptest.NewRecorder()
 	getPlayerCoinsRouter().ServeHTTP(w, authedRequest(
-		http.MethodGet, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins", "", "",
+		http.MethodGet, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins", "", "",
 	))
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }
@@ -483,7 +484,7 @@ func TestGetPlayerTransactions_ReturnsList(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, authedRequest(
-			http.MethodPost, "/api/v1/players/"+uuid+"/coins/award", writeToken,
+			http.MethodPost, "/api/v1/minecraft/players/"+uuid+"/coins/award", writeToken,
 			`{"amount":10,"source":"minigame"}`,
 		))
 		require.Equal(t, http.StatusOK, w.Code)
@@ -491,7 +492,7 @@ func TestGetPlayerTransactions_ReturnsList(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	getPlayerTransactionsRouter().ServeHTTP(w, authedRequest(
-		http.MethodGet, "/api/v1/players/"+uuid+"/coins/transactions", readToken, "",
+		http.MethodGet, "/api/v1/minecraft/players/"+uuid+"/coins/transactions", readToken, "",
 	))
 
 	require.Equal(t, http.StatusOK, w.Code)
@@ -510,7 +511,7 @@ func TestGetPlayerTransactions_PlayerNotFound(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	getPlayerTransactionsRouter().ServeHTTP(w, authedRequest(
-		http.MethodGet, "/api/v1/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/transactions", token, "",
+		http.MethodGet, "/api/v1/minecraft/players/069a79f4-44e9-4726-a5be-fca90e38aaf5/coins/transactions", token, "",
 	))
 	assert.Equal(t, http.StatusNotFound, w.Code)
 }
@@ -528,7 +529,7 @@ func TestGetPlayerTransactions_Pagination(t *testing.T) {
 	for i := 0; i < 3; i++ {
 		w := httptest.NewRecorder()
 		r.ServeHTTP(w, authedRequest(
-			http.MethodPost, "/api/v1/players/"+uuid+"/coins/award", writeToken,
+			http.MethodPost, "/api/v1/minecraft/players/"+uuid+"/coins/award", writeToken,
 			`{"amount":10,"source":"minigame"}`,
 		))
 		require.Equal(t, http.StatusOK, w.Code)
@@ -536,7 +537,7 @@ func TestGetPlayerTransactions_Pagination(t *testing.T) {
 
 	w := httptest.NewRecorder()
 	getPlayerTransactionsRouter().ServeHTTP(w, authedRequest(
-		http.MethodGet, "/api/v1/players/"+uuid+"/coins/transactions?limit=2&offset=0", readToken, "",
+		http.MethodGet, "/api/v1/minecraft/players/"+uuid+"/coins/transactions?limit=2&offset=0", readToken, "",
 	))
 
 	require.Equal(t, http.StatusOK, w.Code)
@@ -564,7 +565,7 @@ func TestListPlayers_ReturnsList(t *testing.T) {
 	}
 
 	w := httptest.NewRecorder()
-	listPlayersRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/players", token, ""))
+	listPlayersRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/minecraft/players", token, ""))
 
 	require.Equal(t, http.StatusOK, w.Code)
 	var players []models.MinecraftPlayer
@@ -588,7 +589,7 @@ func TestListPlayers_Empty(t *testing.T) {
 	token := mustCreateToken(t, userID, []string{perms.CoinsRead})
 
 	w := httptest.NewRecorder()
-	listPlayersRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/players", token, ""))
+	listPlayersRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/minecraft/players", token, ""))
 
 	require.Equal(t, http.StatusOK, w.Code)
 	var players []models.MinecraftPlayer
@@ -599,6 +600,6 @@ func TestListPlayers_Empty(t *testing.T) {
 func TestListPlayers_Unauthorized(t *testing.T) {
 	cleanDB(t)
 	w := httptest.NewRecorder()
-	listPlayersRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/players", "", ""))
+	listPlayersRouter().ServeHTTP(w, authedRequest(http.MethodGet, "/api/v1/minecraft/players", "", ""))
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 }

@@ -251,7 +251,7 @@ async function load(reset = false) {
     players.value = []
   }
   try {
-    const page = await apiFetch<Player[]>(`/api/v1/players?limit=${limit}&offset=${offset.value}`)
+    const page = await apiFetch<Player[]>(`/api/v1/minecraft/players?limit=${limit}&offset=${offset.value}`)
     players.value = reset ? page : [...players.value, ...page]
     offset.value += page.length
   } catch {
@@ -284,7 +284,7 @@ async function openHistory(p: Player) {
   historyDialog.open = true
   try {
     historyDialog.transactions = await apiFetch<Transaction[]>(
-      `/api/v1/players/${p.uuid}/coins/transactions`
+      `/api/v1/minecraft/players/${p.uuid}/coins/transactions`
     )
   } catch {
     historyDialog.error = 'Failed to load transactions.'
@@ -327,9 +327,9 @@ async function confirmAdjustByName() {
   adjustByNameDialog.error = ''
   try {
     const { uuid } = await apiFetch<{ uuid: string }>(
-      `/api/v1/players/lookup?name=${encodeURIComponent(name)}`
+      `/api/v1/minecraft/players/lookup-name?name=${encodeURIComponent(name)}`
     )
-    const res = await apiFetch<{ balance: number }>(`/api/v1/players/${uuid}/coins/adjust`, {
+    const res = await apiFetch<{ balance: number }>(`/api/v1/minecraft/players/${uuid}/coins/adjust`, {
       method: 'POST',
       body: {
         amount: adjustByNameDialog.amount,
@@ -371,7 +371,7 @@ async function confirmDelete() {
   deleteDialog.error = ''
   const { player } = deleteDialog
   try {
-    await apiFetch(`/api/v1/players/${player.uuid}`, { method: 'DELETE' })
+    await apiFetch(`/api/v1/minecraft/players/${player.uuid}`, { method: 'DELETE' })
     deleteDialog.open = false
     players.value = players.value.filter(p => p.id !== player.id)
     toast.success('Player deleted')
@@ -405,7 +405,7 @@ async function confirmAdjust() {
   adjustDialog.error = ''
   const { player, amount, description } = adjustDialog
   try {
-    const res = await apiFetch<{ balance: number }>(`/api/v1/players/${targetUuid}/coins/adjust`, {
+    const res = await apiFetch<{ balance: number }>(`/api/v1/minecraft/players/${targetUuid}/coins/adjust`, {
       method: 'POST',
       body: {
         amount,
