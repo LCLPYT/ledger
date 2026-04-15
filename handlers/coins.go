@@ -8,6 +8,7 @@ import (
 	"ledger/mojang"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -411,6 +412,10 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 // It can be replaced in tests to avoid real network calls.
 var FetchUsername = mojang.FetchUsername
 
+// FetchUUIDByName is the function used to resolve a Minecraft username to a UUID.
+// It can be replaced in tests to avoid real network calls.
+var FetchUUIDByName = mojang.FetchUUIDByName
+
 func fetchAndCacheUsername(db *sql.DB, playerID int64, uuid string) {
 	name, err := FetchUsername(uuid)
 	if err != nil {
@@ -420,6 +425,62 @@ func fetchAndCacheUsername(db *sql.DB, playerID int64, uuid string) {
 		`UPDATE minecraft_players SET username = NULLIF($1, ''), username_fetched_at = now() WHERE id = $2`,
 		name, playerID,
 	)
+}
+
+// LookupPlayerByName resolves a Minecraft username to a UUID.
+// It checks the minecraft_players cache first (valid for 1 hour), then falls back to the Mojang API.
+func LookupPlayerByName(db *sql.DB) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := strings.TrimSpace(c.Query("name"))
+		if name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
+			return
+		}
+
+		// Cache hit: username fetched within the last hour
+		var cachedUUID string
+		err := db.QueryRow(
+			`SELECT uuid FROM minecraft_players
+			 WHERE LOWER(username) = LOWER($1)
+			   AND username_fetched_at > now() - INTERVAL '1 hour'`,
+			name,
+		).Scan(&cachedUUID)
+		if err == nil {
+			c.JSON(http.StatusOK, gin.H{"uuid": cachedUUID})
+			return
+		}
+		if err != sql.ErrNoRows {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		// Cache miss: call Mojang API
+		mojangUUID, err := FetchUUIDByName(name)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to resolve player name"})
+			return
+		}
+		if mojangUUID == "" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
+			return
+		}
+
+		// Upsert player with fresh username + timestamp
+		_, err = db.Exec(
+			`INSERT INTO minecraft_players (uuid, username, username_fetched_at)
+			 VALUES ($1, $2, now())
+			 ON CONFLICT (uuid) DO UPDATE
+			   SET username = EXCLUDED.username,
+			       username_fetched_at = now()`,
+			mojangUUID, name,
+		)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"uuid": mojangUUID})
+	}
 }
 
 func ListPlayers(db *sql.DB) gin.HandlerFunc {

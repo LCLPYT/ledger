@@ -24,6 +24,7 @@ var (
 func TestMain(m *testing.M) {
 	// Prevent tests from making real Mojang API calls.
 	handlers.FetchUsername = func(string) (string, error) { return "", nil }
+	handlers.FetchUUIDByName = func(string) (string, error) { return "", nil }
 
 	dsn := os.Getenv("DATABASE_URL")
 

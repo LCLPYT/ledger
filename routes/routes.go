@@ -67,6 +67,7 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 
 	players := v1.Group("/players")
 	players.GET("", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.ListPlayers(db))
+	players.GET("/lookup", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.LookupPlayerByName(db))
 	players.GET("/:uuid/coins", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.GetPlayerCoins(db))
 	players.GET("/:uuid/coins/transactions", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.GetPlayerTransactions(db))
 	players.POST("/:uuid/coins/award", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.AwardCoins(db))
