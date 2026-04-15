@@ -327,7 +327,7 @@ async function confirmAdjustByName() {
   adjustByNameDialog.error = ''
   try {
     const { uuid } = await apiFetch<{ uuid: string }>(
-      `/api/v1/minecraft/players/lookup-name?name=${encodeURIComponent(name)}`
+      `/api/v1/minecraft/players/lookup?name=${encodeURIComponent(name)}`
     )
     const res = await apiFetch<{ balance: number }>(`/api/v1/minecraft/players/${uuid}/coins/adjust`, {
       method: 'POST',
