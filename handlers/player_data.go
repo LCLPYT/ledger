@@ -3,13 +3,15 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
 
+	"ledger/util"
+
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
-	"ledger/util"
 )
 
 // splitPath converts "game/soccer/foo" → ["game","soccer","foo"].
@@ -88,19 +90,69 @@ func SetPlayerData(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		result, err := db.Exec(
-			`UPDATE minecraft_players
-			 SET data = jsonb_set(data, $1, $2::jsonb, true)
-			 WHERE uuid = $3`,
-			pq.Array(parts), string(body), uid,
-		)
+		var newValue any
+		if err := json.Unmarshal(body, &newValue); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "body must be valid JSON"})
+			return
+		}
+
+		tx, err := db.Begin()
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		rows, _ := result.RowsAffected()
-		if rows == 0 {
+		defer func() { _ = tx.Rollback() }()
+
+		var rawData []byte
+		err = tx.QueryRow(
+			`SELECT data FROM minecraft_players WHERE uuid = $1 FOR UPDATE`, uid,
+		).Scan(&rawData)
+		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
+			return
+		}
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		var root map[string]any
+		if err := json.Unmarshal(rawData, &root); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		// Navigate/create intermediate nodes, then set the leaf value.
+		// jsonb_set(create_missing=true) only creates the leaf key, not
+		// intermediate nodes, so we do it in Go inside a FOR UPDATE transaction.
+		cur := root
+		for _, key := range parts[:len(parts)-1] {
+			if m, ok := cur[key].(map[string]any); ok {
+				cur = m
+			} else {
+				m = make(map[string]any)
+				cur[key] = m
+				cur = m
+			}
+		}
+		cur[parts[len(parts)-1]] = newValue
+
+		newData, err := json.Marshal(root)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if _, err = tx.Exec(
+			`UPDATE minecraft_players SET data = $1::jsonb WHERE uuid = $2`,
+			string(newData), uid,
+		); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if err := tx.Commit(); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
