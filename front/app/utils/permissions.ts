@@ -8,4 +8,6 @@ export const Perms = {
   RolesManageUsers: 'roles.manage_users',
   CoinsRead:        'coins.read',
   CoinsWrite:       'coins.write',
+  PlayerRead:       'minecraft.player_read',
+  PlayerWrite:      'minecraft.player_write',
 } as const

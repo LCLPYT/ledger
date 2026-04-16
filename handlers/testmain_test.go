@@ -2,6 +2,7 @@ package handlers_test
 
 import (
 	"database/sql"
+	"ledger/mc"
 	"os"
 	"strconv"
 	"strings"
@@ -10,7 +11,6 @@ import (
 
 	"ledger/auth"
 	appdb "ledger/db"
-	"ledger/handlers"
 
 	"github.com/casbin/casbin/v2"
 	"golang.org/x/crypto/bcrypt"
@@ -23,8 +23,8 @@ var (
 
 func TestMain(m *testing.M) {
 	// Prevent tests from making real Mojang API calls.
-	handlers.FetchUsername = func(string) (string, error) { return "", nil }
-	handlers.FetchUUIDByName = func(string) (string, error) { return "", nil }
+	mc.FetchUsername = func(string) (string, error) { return "", nil }
+	mc.FetchUUIDByName = func(string) (string, error) { return "", nil }
 
 	dsn := os.Getenv("DATABASE_URL")
 
@@ -42,7 +42,18 @@ func TestMain(m *testing.M) {
 
 func cleanDB(t *testing.T) {
 	t.Helper()
-	_, err := testDB.Exec("TRUNCATE access_tokens, sessions, users, user_invitations, roles, coin_transactions, coin_balances, minecraft_players RESTART IDENTITY CASCADE")
+	_, err := testDB.Exec(
+		`TRUNCATE 
+			access_tokens, 
+			sessions, 
+			users, 
+			user_invitations, 
+			roles, 
+			coin_transactions, 
+			coin_balances, 
+			minecraft_players 
+			RESTART IDENTITY CASCADE`,
+	)
 	if err != nil {
 		t.Fatalf("cleanDB: %v", err)
 	}
@@ -74,7 +85,8 @@ func mustCreateUser(t *testing.T, username, email, password string) int64 {
 	}
 	var id int64
 	err = testDB.QueryRow(
-		"INSERT INTO users (username, email, password_hash, verified_at) VALUES ($1, $2, $3, now()) RETURNING id",
+		`INSERT INTO users (username, email, password_hash, verified_at) 
+		VALUES ($1, $2, $3, now()) RETURNING id`,
 		username, email, hash,
 	).Scan(&id)
 	if err != nil {

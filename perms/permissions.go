@@ -10,6 +10,8 @@ const (
 	RolesManageUsers = "roles.manage_users"
 	CoinsRead        = "coins.read"
 	CoinsWrite       = "coins.write"
+	PlayerRead       = "minecraft.player_read"
+	PlayerWrite      = "minecraft.player_write"
 )
 
 var All = []string{
@@ -22,6 +24,8 @@ var All = []string{
 	RolesManageUsers,
 	CoinsRead,
 	CoinsWrite,
+	PlayerRead,
+	PlayerWrite,
 }
 
 var DefaultPermissions = []string{

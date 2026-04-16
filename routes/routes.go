@@ -65,14 +65,20 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	roles.POST("/:role/users", middleware.AuthRequired(enforcer, db, perms.RolesManageUsers), handlers.AddUserToRole(db, enforcer))
 	roles.DELETE("/:role/users", middleware.AuthRequired(enforcer, db, perms.RolesManageUsers), handlers.RemoveUserFromRole(db, enforcer))
 
-	players := v1.Group("/players")
-	players.GET("", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.ListPlayers(db))
-	players.GET("/lookup", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.LookupPlayerByName(db))
-	players.GET("/:uuid/coins", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.GetPlayerCoins(db))
-	players.GET("/:uuid/coins/transactions", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.GetPlayerTransactions(db))
-	players.POST("/:uuid/coins/award", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.AwardCoins(db))
-	players.POST("/:uuid/coins/spend", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.SpendCoins(db))
-	players.POST("/:uuid/coins/adjust", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.AdjustCoins(db))
-	players.DELETE("/:uuid", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.DeletePlayer(db))
+	minecraft := v1.Group("/minecraft")
 
+	players := minecraft.Group("/players")
+	players.GET("", middleware.AuthRequired(enforcer, db, perms.PlayerRead), handlers.ListPlayers(db))
+	players.GET("/lookup", middleware.AuthRequired(enforcer, db, perms.PlayerWrite), handlers.LookupPlayerByName(db))
+
+	player := players.Group("/:uuid")
+	player.GET("", middleware.AuthRequired(enforcer, db, perms.PlayerWrite), handlers.GetPlayer(db))
+	player.DELETE("", middleware.AuthRequired(enforcer, db, perms.PlayerWrite), handlers.DeletePlayer(db))
+
+	coins := player.Group("/coins")
+	coins.GET("", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.GetPlayerCoins(db))
+	coins.GET("/transactions", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.GetPlayerTransactions(db))
+	coins.POST("/award", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.AwardCoins(db))
+	coins.POST("/spend", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.SpendCoins(db))
+	coins.POST("/adjust", middleware.AuthRequired(enforcer, db, perms.CoinsWrite), handlers.AdjustCoins(db))
 }

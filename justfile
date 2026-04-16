@@ -36,10 +36,14 @@ test filter="":
     docker volume rm ledger_pgdata_test || true
     docker compose up postgres_test -d --wait
 
-    DATABASE_URL="postgres://db:db@localhost:5433/db?sslmode=disable" SMTP_HOST="" go test ./handlers/... -v {{ if filter != "" { "-run " + filter } else { "" } }}
+    DATABASE_URL="postgres://db:db@localhost:5433/db?sslmode=disable" SMTP_HOST="" \
+        go test ./handlers/... -v {{ if filter != "" { "-run " + filter } else { "" } }} -coverprofile=coverage.out
 
     docker compose down postgres_test || true
     docker volume rm ledger_pgdata_test || true
+
+coverage: test
+    go tool cover -html=coverage.out
 
 build:
     go build -ldflags "-s -w" .

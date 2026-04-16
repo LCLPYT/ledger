@@ -509,10 +509,16 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/players:
+  /api/v1/minecraft/players:
     get:
-      summary: List Minecraft players with their coin balances
+      summary: List Minecraft players
       parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+          description: Filter by username (substring) or exact UUID. Results ranked by similarity.
+          example: Notch
         - name: limit
           in: query
           schema:
@@ -538,7 +544,52 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
-  /api/v1/players/{uuid}:
+  /api/v1/minecraft/players/lookup:
+    get:
+      summary: Resolve a Minecraft username to a player (1-hour cache, then Mojang API)
+      parameters:
+        - name: name
+          in: query
+          required: true
+          schema:
+            type: string
+          example: Notch
+      responses:
+        "200":
+          description: Resolved player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinecraftPlayer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/minecraft/players/{uuid}:
+    get:
+      summary: Get a player by UUID (auto-creates if valid Mojang UUID)
+      parameters:
+        - $ref: "#/components/parameters/PlayerUUID"
+      responses:
+        "200":
+          description: Player
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MinecraftPlayer"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
     delete:
       summary: Delete a player and all their coin data
       parameters:
@@ -555,7 +606,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/players/{uuid}/coins:
+  /api/v1/minecraft/players/{uuid}/coins:
     get:
       summary: Get a player's current coin balance
       parameters:
@@ -585,7 +636,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/players/{uuid}/coins/transactions:
+  /api/v1/minecraft/players/{uuid}/coins/transactions:
     get:
       summary: List coin transactions for a player
       parameters:
@@ -622,7 +673,7 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
-  /api/v1/players/{uuid}/coins/award:
+  /api/v1/minecraft/players/{uuid}/coins/award:
     post:
       summary: Award coins to a player (auto-creates player if unknown)
       parameters:
@@ -652,7 +703,7 @@ paths:
         "403":
           $ref: "#/components/responses/Forbidden"
 
-  /api/v1/players/{uuid}/coins/spend:
+  /api/v1/minecraft/players/{uuid}/coins/spend:
     post:
       summary: Deduct coins from a player (fails if balance insufficient)
       parameters:
@@ -690,7 +741,7 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
-  /api/v1/players/{uuid}/coins/adjust:
+  /api/v1/minecraft/players/{uuid}/coins/adjust:
     post:
       summary: Adjust a player's balance by a signed amount (admin)
       parameters:
@@ -988,10 +1039,6 @@ components:
           type: string
           nullable: true
           example: Notch
-        balance:
-          type: integer
-          format: int64
-          example: 1500
         created_at:
           type: string
           format: date-time
