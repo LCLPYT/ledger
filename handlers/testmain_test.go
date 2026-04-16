@@ -13,6 +13,7 @@ import (
 	appdb "ledger/db"
 
 	"github.com/casbin/casbin/v3"
+	"github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -32,7 +33,8 @@ func TestMain(m *testing.M) {
 		dsn = "postgres://db:db@localhost:5433/db?sslmode=disable"
 	}
 
-	testDB = appdb.InitDB(dsn)
+	pool := appdb.InitDB(dsn)
+	testDB = stdlib.OpenDBFromPool(pool)
 	testEnforcer = appdb.InitCasbin(dsn)
 
 	code := m.Run()

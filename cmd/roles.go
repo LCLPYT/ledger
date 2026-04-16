@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"strings"
+
+	"github.com/jackc/pgx/v5/stdlib"
 )
 
 func RunRoles(args []string) {
@@ -26,8 +28,9 @@ func RunRoles(args []string) {
 
 func runInitRoles() {
 	dsn := os.Getenv("DATABASE_URL")
-	database := db.InitDB(dsn)
-	defer database.Close()
+	pool := db.InitDB(dsn)
+	defer pool.Close()
+	database := stdlib.OpenDBFromPool(pool)
 
 	enforcer := db.InitCasbin(dsn)
 

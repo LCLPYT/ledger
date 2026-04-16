@@ -1,18 +1,19 @@
 package db
 
 import (
-	"database/sql"
+	"context"
 	"embed"
 	"errors"
 	"log"
 
-	pgxadapter "github.com/noho-digital/casbin-pgx-adapter"
 	"github.com/casbin/casbin/v3"
 	"github.com/casbin/casbin/v3/model"
 	"github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
-	_ "github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5/stdlib"
+	pgxadapter "github.com/noho-digital/casbin-pgx-adapter"
 )
 
 //go:embed migrations/*.sql
@@ -21,17 +22,23 @@ var migrationsFS embed.FS
 //go:embed casbin_model.conf
 var casbinModel string
 
-func InitDB(dsn string) *sql.DB {
+// InitDB creates a pgxpool, runs migrations, and returns the pool.
+// Callers that need a *sql.DB (e.g. for Gin handlers) should wrap with stdlib.OpenDBFromPool.
+func InitDB(dsn string) *pgxpool.Pool {
 	if dsn == "" {
 		panic(errors.New("database URL is empty"))
 	}
 
-	db, err := sql.Open("pgx", dsn)
+	pool, err := pgxpool.New(context.Background(), dsn)
 	if err != nil {
 		panic(err)
 	}
 
-	driver, err := pgxmigrate.WithInstance(db, &pgxmigrate.Config{})
+	// Wrap pool as *sql.DB solely for the migrate driver.
+	sqlDB := stdlib.OpenDBFromPool(pool)
+	defer sqlDB.Close()
+
+	driver, err := pgxmigrate.WithInstance(sqlDB, &pgxmigrate.Config{})
 	if err != nil {
 		panic(err)
 	}
@@ -50,7 +57,7 @@ func InitDB(dsn string) *sql.DB {
 		log.Fatalf("Migration failed: %v", err)
 	}
 
-	return db
+	return pool
 }
 
 func InitCasbin(dsn string) *casbin.Enforcer {

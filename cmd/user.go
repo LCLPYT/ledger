@@ -13,8 +13,6 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/jackc/pgx/v5"
-	_ "github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/term"
 )
 
@@ -35,15 +33,9 @@ func RunUser(args []string) {
 
 func runCreateUser() {
 	dsn := os.Getenv("DATABASE_URL")
-	database := appdb.InitDB(dsn)
-	defer database.Close()
-
-	conn, err := pgx.Connect(context.Background(), dsn)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer conn.Close(context.Background())
-	queries := dbsqlc.New(conn)
+	pool := appdb.InitDB(dsn)
+	defer pool.Close()
+	queries := dbsqlc.New(pool)
 
 	enforcer := appdb.InitCasbin(dsn)
 
