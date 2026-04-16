@@ -12,7 +12,7 @@ import (
 	"ledger/auth"
 	appdb "ledger/db"
 
-	"github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v3"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -58,6 +58,9 @@ func cleanDB(t *testing.T) {
 		t.Fatalf("cleanDB: %v", err)
 	}
 	testEnforcer.ClearPolicy()
+	if err := testEnforcer.SavePolicy(); err != nil {
+		t.Fatalf("cleanDB SavePolicy: %v", err)
+	}
 }
 
 func mustCreateSession(t *testing.T, userID int64) string {
@@ -129,7 +132,8 @@ func mustAddPermission(t *testing.T, userID int64, permission string) {
 
 func mustAddPolicy(t *testing.T, userID int64, obj, act string) {
 	t.Helper()
-	if _, err := testEnforcer.AddPolicy(strconv.FormatInt(userID, 10), obj, act); err != nil {
+	_, err := testEnforcer.AddPolicy(strconv.FormatInt(userID, 10), obj, act)
+	if err != nil && err.Error() != "policy already exists" {
 		t.Fatalf("mustAddPolicy: %v", err)
 	}
 }
@@ -137,14 +141,16 @@ func mustAddPolicy(t *testing.T, userID int64, obj, act string) {
 func mustAddRolePermission(t *testing.T, roleName, permission string) {
 	t.Helper()
 	parts := strings.Split(permission, ".")
-	if _, err := testEnforcer.AddPolicy(roleName, parts[0], parts[1]); err != nil {
+	_, err := testEnforcer.AddPolicy(roleName, parts[0], parts[1])
+	if err != nil && err.Error() != "policy already exists" {
 		t.Fatalf("mustAddRolePermission: %v", err)
 	}
 }
 
 func mustAssignUserToRole(t *testing.T, userID int64, roleName string) {
 	t.Helper()
-	if _, err := testEnforcer.AddGroupingPolicy(strconv.FormatInt(userID, 10), roleName); err != nil {
+	_, err := testEnforcer.AddGroupingPolicy(strconv.FormatInt(userID, 10), roleName)
+	if err != nil && err.Error() != "policy already exists" {
 		t.Fatalf("mustAssignUserToRole: %v", err)
 	}
 }

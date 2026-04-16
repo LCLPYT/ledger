@@ -6,9 +6,9 @@ import (
 	"errors"
 	"log"
 
-	casbinpg "github.com/casbin/casbin-pg-adapter"
-	"github.com/casbin/casbin/v2"
-	"github.com/casbin/casbin/v2/model"
+	pgxadapter "github.com/noho-digital/casbin-pgx-adapter"
+	"github.com/casbin/casbin/v3"
+	"github.com/casbin/casbin/v3/model"
 	"github.com/golang-migrate/migrate/v4"
 	pgxmigrate "github.com/golang-migrate/migrate/v4/database/pgx/v5"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -59,7 +59,7 @@ func InitCasbin(dsn string) *casbin.Enforcer {
 		panic(err)
 	}
 
-	adapter, err := casbinpg.NewAdapter(dsn)
+	adapter, err := pgxadapter.NewAdapter(dsn)
 	if err != nil {
 		panic(err)
 	}

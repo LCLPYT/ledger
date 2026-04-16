@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/casbin/casbin/v2"
+	"github.com/casbin/casbin/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -274,6 +274,10 @@ func RemoveUserFromRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 		}
 
 		removed, err := enforcer.RemoveGroupingPolicy(req.UserID, roleName)
+		if err != nil && err.Error() == "policy not found" {
+			c.JSON(http.StatusNotFound, gin.H{"error": "user does not have this role"})
+			return
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to remove role"})
 			return

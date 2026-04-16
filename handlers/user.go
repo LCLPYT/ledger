@@ -11,13 +11,13 @@ import (
 	"ledger/models"
 	"ledger/perms"
 	"ledger/util"
+	"log"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
 
-	"github.com/casbin/casbin/v2"
-	casbinlog "github.com/casbin/casbin/v2/log"
+	"github.com/casbin/casbin/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgerrcode"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -236,7 +236,7 @@ func GetUser(db *sql.DB) gin.HandlerFunc {
 				return
 			}
 
-			casbinlog.LogError(err, "Failed to query user")
+			log.Printf("Failed to query user: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
