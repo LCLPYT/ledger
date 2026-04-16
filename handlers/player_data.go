@@ -3,11 +3,11 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
-	"errors"
 	"io"
 	"net/http"
 	"strings"
 
+	"ledger/mc"
 	"ledger/util"
 
 	"github.com/gin-gonic/gin"
@@ -103,14 +103,16 @@ func SetPlayerData(db *sql.DB) gin.HandlerFunc {
 		}
 		defer func() { _ = tx.Rollback() }()
 
-		var rawData []byte
-		err = tx.QueryRow(
-			`SELECT data FROM minecraft_players WHERE uuid = $1 FOR UPDATE`, uid,
-		).Scan(&rawData)
-		if errors.Is(err, sql.ErrNoRows) {
-			c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
+		playerID, err := mc.UpsertPlayer(db, tx, uid)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
+
+		var rawData []byte
+		err = tx.QueryRow(
+			`SELECT data FROM minecraft_players WHERE id = $1`, playerID,
+		).Scan(&rawData)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -144,8 +146,8 @@ func SetPlayerData(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if _, err = tx.Exec(
-			`UPDATE minecraft_players SET data = $1::jsonb WHERE uuid = $2`,
-			string(newData), uid,
+			`UPDATE minecraft_players SET data = $1::jsonb WHERE id = $2`,
+			string(newData), playerID,
 		); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return

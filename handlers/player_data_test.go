@@ -236,7 +236,7 @@ func TestSetPlayerData_ObjectValue(t *testing.T) {
 	assert.JSONEq(t, `{"prefs":{"theme":"dark","volume":80}}`, string(getPlayerData(t, testPlayerUUID)))
 }
 
-func TestSetPlayerData_PlayerNotFound(t *testing.T) {
+func TestSetPlayerData_AutoCreatesPlayer(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateUser(t, "alice", "alice@example.com", "x")
 	mustAddPermission(t, userID, perms.PlayerDataWrite)
@@ -246,7 +246,9 @@ func TestSetPlayerData_PlayerNotFound(t *testing.T) {
 	playerDataRouter().ServeHTTP(w, authedRequest(
 		http.MethodPut, "/api/v1/minecraft/players/"+testPlayerUUID+"/data/lang", token, `"en"`,
 	))
-	assert.Equal(t, http.StatusNotFound, w.Code)
+
+	require.Equal(t, http.StatusOK, w.Code)
+	assert.JSONEq(t, `{"lang":"en"}`, string(getPlayerData(t, testPlayerUUID)))
 }
 
 func TestSetPlayerData_InvalidJSON(t *testing.T) {
