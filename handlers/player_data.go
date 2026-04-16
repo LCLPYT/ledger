@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"strings"
@@ -49,7 +50,7 @@ func GetPlayerData(db *sql.DB) gin.HandlerFunc {
 			).Scan(&raw)
 		}
 
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
 			return
 		}
