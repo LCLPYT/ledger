@@ -1254,6 +1254,16 @@ components:
           type: string
           example: unauthorized
 
+  parameters:
+    PlayerUUID:
+      name: uuid
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+      example: 069a79f4-44e9-4726-a5be-fca90e38aaf5
+
   responses:
     BadRequest:
       description: Invalid request body or parameters
