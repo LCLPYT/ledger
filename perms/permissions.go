@@ -12,6 +12,8 @@ const (
 	CoinsWrite       = "coins.write"
 	PlayerRead       = "minecraft.player_read"
 	PlayerWrite      = "minecraft.player_write"
+	PlayerDataRead   = "minecraft.player_data_read"
+	PlayerDataWrite  = "minecraft.player_data_write"
 )
 
 var All = []string{
@@ -26,6 +28,8 @@ var All = []string{
 	CoinsWrite,
 	PlayerRead,
 	PlayerWrite,
+	PlayerDataRead,
+	PlayerDataWrite,
 }
 
 var DefaultPermissions = []string{

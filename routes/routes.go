@@ -75,6 +75,12 @@ func SetupRoutes(r *gin.Engine, enforcer *casbin.Enforcer, db *sql.DB) {
 	player.GET("", middleware.AuthRequired(enforcer, db, perms.PlayerWrite), handlers.GetPlayer(db))
 	player.DELETE("", middleware.AuthRequired(enforcer, db, perms.PlayerWrite), handlers.DeletePlayer(db))
 
+	data := player.Group("/data")
+	data.GET("", middleware.AuthRequired(enforcer, db, perms.PlayerDataRead), handlers.GetPlayerData(db))
+	data.GET("/*path", middleware.AuthRequired(enforcer, db, perms.PlayerDataRead), handlers.GetPlayerData(db))
+	data.PUT("/*path", middleware.AuthRequired(enforcer, db, perms.PlayerDataWrite), handlers.SetPlayerData(db))
+	data.DELETE("/*path", middleware.AuthRequired(enforcer, db, perms.PlayerDataWrite), handlers.DeletePlayerData(db))
+
 	coins := player.Group("/coins")
 	coins.GET("", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.GetPlayerCoins(db))
 	coins.GET("/transactions", middleware.AuthRequired(enforcer, db, perms.CoinsRead), handlers.GetPlayerTransactions(db))

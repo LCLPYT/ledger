@@ -606,6 +606,103 @@ paths:
         "404":
           $ref: "#/components/responses/NotFound"
 
+  /api/v1/minecraft/players/{uuid}/data:
+    get:
+      summary: Get the full player data blob
+      parameters:
+        - $ref: "#/components/parameters/PlayerUUID"
+      responses:
+        "200":
+          description: Full JSONB data object
+          content:
+            application/json:
+              schema: {}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /api/v1/minecraft/players/{uuid}/data/{path}:
+    get:
+      summary: Get player data at a slash-separated path
+      parameters:
+        - $ref: "#/components/parameters/PlayerUUID"
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+          example: game/soccer/preferred_color
+      responses:
+        "200":
+          description: JSON value at the given path
+          content:
+            application/json:
+              schema: {}
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    put:
+      summary: Set player data at a slash-separated path (replaces subtree)
+      parameters:
+        - $ref: "#/components/parameters/PlayerUUID"
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+          example: game/soccer/preferred_color
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {}
+      responses:
+        "200":
+          description: Data written
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+    delete:
+      summary: Delete player data at a slash-separated path
+      parameters:
+        - $ref: "#/components/parameters/PlayerUUID"
+        - name: path
+          in: path
+          required: true
+          schema:
+            type: string
+          example: game/soccer/preferred_color
+      responses:
+        "204":
+          description: Path deleted
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
   /api/v1/minecraft/players/{uuid}/coins:
     get:
       summary: Get a player's current coin balance
