@@ -2,8 +2,10 @@ package cmd
 
 import (
 	"bufio"
+	"context"
 	"fmt"
-	"ledger/db"
+	appdb "ledger/db"
+	dbsqlc "ledger/db/sqlc"
 	"ledger/util"
 	"log"
 	"os"
@@ -11,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 
+	"github.com/jackc/pgx/v5"
 	_ "github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/term"
 )
@@ -32,10 +35,17 @@ func RunUser(args []string) {
 
 func runCreateUser() {
 	dsn := os.Getenv("DATABASE_URL")
-	database := db.InitDB(dsn)
+	database := appdb.InitDB(dsn)
 	defer database.Close()
 
-	enforcer := db.InitCasbin(dsn)
+	conn, err := pgx.Connect(context.Background(), dsn)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer conn.Close(context.Background())
+	queries := dbsqlc.New(conn)
+
+	enforcer := appdb.InitCasbin(dsn)
 
 	reader := bufio.NewReader(os.Stdin)
 
@@ -63,11 +73,11 @@ func runCreateUser() {
 	adminInput, _ := reader.ReadString('\n')
 	isAdmin := strings.TrimSpace(strings.ToLower(adminInput)) == "y"
 
-	var id int64
-	err = database.QueryRow(
-		"INSERT INTO users (username, email, password_hash, verified_at) VALUES ($1, $2, $3, now()) RETURNING id",
-		username, email, hash,
-	).Scan(&id)
+	id, err := queries.AddUser(context.Background(), dbsqlc.AddUserParams{
+		Username:     username,
+		Email:        email,
+		PasswordHash: hash,
+	})
 	if err != nil {
 		log.Fatal(err)
 	}

@@ -31,7 +31,7 @@ The server also requires `JWT_SECRET` to be set (used by `auth/jwt.go`).
 
 This is a Go REST API using:
 - **Gin** — HTTP router
-- **database/sql + lib/pq** — raw SQL against PostgreSQL (no ORM)
+- **database/sql + pgx/v5** — raw SQL against PostgreSQL (no ORM)
 - **golang-migrate** — runs `migrations/` on startup automatically
 - **Casbin** — RBAC/ABAC authorization, backed by a PostgreSQL adapter
 - **golang-jwt** — HS256 JWT tokens
@@ -81,7 +81,15 @@ The middleware sets `tokenType` and `tokenScopes` in the Gin context (via `c.Set
 
 All tables that reference `users` use `ON DELETE CASCADE`, so `DELETE FROM users WHERE id = $1` is sufficient; Casbin role assignments must be cleaned up separately via `enforcer.DeleteUser(userIDStr)`.
 
-Migrations live in `migrations/` and run automatically on server startup.
+Migrations live in `db/migrations/` and run automatically on server startup.
+
+### sqlc
+
+SQL queries live in `db/queries/`. Generated Go code is committed to `db/sqlc/`. Regenerate after changing queries or migrations:
+
+```sh
+sqlc generate
+```
 
 > **Keep `routes/openapi.yaml` in sync** when adding or changing routes. Update paths, request bodies, response schemas, and any new component schemas.
 
