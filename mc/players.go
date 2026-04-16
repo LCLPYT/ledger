@@ -3,6 +3,7 @@ package mc
 import (
 	"database/sql"
 	"errors"
+	"ledger/models"
 	"ledger/mojang"
 	"time"
 )
@@ -55,15 +56,12 @@ func UpsertPlayer(db *sql.DB, tx *sql.Tx, uuid string) (int64, error) {
 
 // GetPlayerID returns the DB id for a minecraft UUID, or 0 if not found.
 func GetPlayerID(db *sql.DB, uuid string) (int64, error) {
-	var id int64
-	err := db.QueryRow(
-		`SELECT id FROM minecraft_players WHERE uuid = $1`,
-		uuid,
-	).Scan(&id)
+	player, _, err := QueryPlayer(db, uuid)
 	if errors.Is(err, sql.ErrNoRows) {
 		return 0, nil
 	}
-	return id, err
+
+	return player.ID, err
 }
 
 // RefreshUsernameCache fetches the current username from Mojang and updates the DB row.
@@ -79,4 +77,34 @@ func RefreshUsernameCache(db *sql.DB, playerID int64, uuid string) {
 			WHERE id = $2`,
 		name, playerID,
 	)
+}
+
+// QueryPlayer fetches a player row by UUID.
+// Returns sql.ErrNoRows if the player doesn't exist.
+func QueryPlayer(db *sql.DB, uid string) (models.MinecraftPlayer, *time.Time, error) {
+	var p models.MinecraftPlayer
+	var fetchedAt *time.Time
+	err := db.QueryRow(
+		`SELECT id, uuid, username, created_at, username_fetched_at
+		 FROM minecraft_players WHERE uuid = $1`,
+		uid,
+	).Scan(&p.ID, &p.UUID, &p.Username, &p.CreatedAt, &fetchedAt)
+	return p, fetchedAt, err
+}
+
+// UpsertPlayerWithUsername inserts or updates a player row with a known username and
+// returns the full player record. Used when the username is already fetched from Mojang.
+func UpsertPlayerWithUsername(db *sql.DB, uuid, username string) (models.MinecraftPlayer, error) {
+	_, err := db.Exec(
+		`INSERT INTO minecraft_players (uuid, username, username_fetched_at)
+		 VALUES ($1, $2, now())
+		 ON CONFLICT (uuid) DO UPDATE
+		   SET username = EXCLUDED.username, username_fetched_at = now()`,
+		uuid, username,
+	)
+	if err != nil {
+		return models.MinecraftPlayer{}, err
+	}
+	p, _, err := QueryPlayer(db, uuid)
+	return p, err
 }
