@@ -11,7 +11,7 @@ import (
 	"strings"
 	"syscall"
 
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"golang.org/x/term"
 )
 

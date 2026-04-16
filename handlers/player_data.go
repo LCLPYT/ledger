@@ -12,7 +12,6 @@ import (
 	"ledger/util"
 
 	"github.com/gin-gonic/gin"
-	"github.com/lib/pq"
 )
 
 // splitPath converts "game/soccer/foo" → ["game","soccer","foo"].
@@ -23,6 +22,16 @@ func splitPath(raw string) []string {
 		return nil
 	}
 	return strings.Split(raw, "/")
+}
+
+// pgTextArray formats a string slice as a Postgres text[] literal, e.g. {"game","soccer"}.
+func pgTextArray(parts []string) string {
+	escaped := make([]string, len(parts))
+	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	for i, p := range parts {
+		escaped[i] = `"` + r.Replace(p) + `"`
+	}
+	return "{" + strings.Join(escaped, ",") + "}"
 }
 
 func GetPlayerData(db *sql.DB) gin.HandlerFunc {
@@ -45,8 +54,8 @@ func GetPlayerData(db *sql.DB) gin.HandlerFunc {
 			).Scan(&raw)
 		} else {
 			err = db.QueryRow(
-				`SELECT data #> $1 FROM minecraft_players WHERE uuid = $2`,
-				pq.Array(parts), uid,
+				`SELECT data #> $1::text[] FROM minecraft_players WHERE uuid = $2`,
+				pgTextArray(parts), uid,
 			).Scan(&raw)
 		}
 
@@ -179,9 +188,9 @@ func DeletePlayerData(db *sql.DB) gin.HandlerFunc {
 
 		result, err := db.Exec(
 			`UPDATE minecraft_players
-			 SET data = data #- $1
+			 SET data = data #- $1::text[]
 			 WHERE uuid = $2`,
-			pq.Array(parts), uid,
+			pgTextArray(parts), uid,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})

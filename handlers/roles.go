@@ -10,7 +10,7 @@ import (
 	"github.com/casbin/casbin/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgerrcode"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func ListRoles(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
@@ -63,7 +63,7 @@ func CreateRole(db *sql.DB) gin.HandlerFunc {
 			req.Name,
 		).Scan(&role.ID, &role.Name, &role.CreatedAt, &role.Protected)
 		if err != nil {
-			if pqErr, ok := errors.AsType[*pq.Error](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
+			if pqErr, ok := errors.AsType[*pgconn.PgError](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
 				c.JSON(http.StatusConflict, gin.H{"error": "role already exists"})
 				return
 			}

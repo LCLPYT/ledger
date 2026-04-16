@@ -20,7 +20,7 @@ import (
 	casbinlog "github.com/casbin/casbin/v2/log"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgerrcode"
-	"github.com/lib/pq"
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 func Login(db *sql.DB) gin.HandlerFunc {
@@ -259,7 +259,7 @@ func CreateUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 			req.Username, req.Email,
 		).Scan(&user.ID, &user.Username, &user.Email, &user.Created)
 		if err != nil {
-			if pqErr, ok := errors.AsType[*pq.Error](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
+			if pqErr, ok := errors.AsType[*pgconn.PgError](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
 				c.JSON(http.StatusConflict, gin.H{"error": "username or email already exists"})
 				return
 			}
@@ -438,7 +438,7 @@ func UpdateUsername(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if _, err := db.Exec("UPDATE users SET username = $1 WHERE id = $2", req.Username, userID); err != nil {
-			if pqErr, ok := errors.AsType[*pq.Error](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
+			if pqErr, ok := errors.AsType[*pgconn.PgError](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
 				c.JSON(http.StatusConflict, gin.H{"error": "username already taken"})
 				return
 			}
@@ -465,7 +465,7 @@ func UpdateEmail(db *sql.DB) gin.HandlerFunc {
 		}
 
 		if _, err := db.Exec("UPDATE users SET email = $1 WHERE id = $2", req.Email, userID); err != nil {
-			if pqErr, ok := errors.AsType[*pq.Error](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
+			if pqErr, ok := errors.AsType[*pgconn.PgError](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
 				c.JSON(http.StatusConflict, gin.H{"error": "email already taken"})
 				return
 			}
