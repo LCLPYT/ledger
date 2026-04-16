@@ -40,7 +40,7 @@ func UpsertPlayer(db *sql.DB, tx *sql.Tx, uuid string) (int64, error) {
 			return 0, err
 		}
 		if fetchedAt == nil || time.Since(*fetchedAt) > UsernameStaleDuration {
-			go fetchAndCacheUsername(db, id, uuid)
+			go RefreshUsernameCache(db, id, uuid)
 		}
 		return id, nil
 	}
@@ -49,7 +49,7 @@ func UpsertPlayer(db *sql.DB, tx *sql.Tx, uuid string) (int64, error) {
 	}
 	// New player: fetch username in background after the transaction commits.
 	// The Mojang API call takes long enough (network) that the commit will have happened.
-	go fetchAndCacheUsername(db, id, uuid)
+	go RefreshUsernameCache(db, id, uuid)
 	return id, nil
 }
 
@@ -66,7 +66,9 @@ func GetPlayerID(db *sql.DB, uuid string) (int64, error) {
 	return id, err
 }
 
-func fetchAndCacheUsername(db *sql.DB, playerID int64, uuid string) {
+// RefreshUsernameCache fetches the current username from Mojang and updates the DB row.
+// Intended to be called in a goroutine.
+func RefreshUsernameCache(db *sql.DB, playerID int64, uuid string) {
 	name, err := FetchUsername(uuid)
 	if err != nil {
 		return
