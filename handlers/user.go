@@ -348,7 +348,7 @@ func VerifyInvitation(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer tx.Rollback(ctx) //nolint:errcheck
+		defer func() { _ = tx.Rollback(ctx) }()
 
 		tq := dbsqlc.New(tx)
 		if err := tq.VerifyUser(ctx, dbsqlc.VerifyUserParams{

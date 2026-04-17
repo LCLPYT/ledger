@@ -18,15 +18,15 @@ import (
 
 func RunUser(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage:")
-		fmt.Fprintln(os.Stderr, "  ledger user create  Create a new user interactively")
+		_, _ = fmt.Fprintln(os.Stderr, "Usage:")
+		_, _ = fmt.Fprintln(os.Stderr, "  ledger user create  Create a new user interactively")
 		os.Exit(1)
 	}
 	switch args[0] {
 	case "create":
 		runCreateUser()
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown user command: %s\n", args[0])
+		_, _ = fmt.Fprintf(os.Stderr, "Unknown user command: %s\n", args[0])
 		os.Exit(1)
 	}
 }

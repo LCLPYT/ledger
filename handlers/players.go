@@ -39,8 +39,7 @@ func ListPlayers(pool *pgxpool.Pool) gin.HandlerFunc {
 				CreatedAt: r.CreatedAt.Time,
 			}
 			if r.Username.Valid {
-				s := r.Username.String
-				p.Username = &s
+				p.Username = new(r.Username.String)
 			}
 			players = append(players, p)
 		}

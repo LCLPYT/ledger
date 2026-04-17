@@ -23,7 +23,7 @@ func startMockSMTP(t *testing.T) (host, port string, body func() string) {
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	t.Cleanup(func() { ln.Close() })
+	t.Cleanup(func() { _ = ln.Close() })
 
 	var mu sync.Mutex
 	var captured strings.Builder
@@ -33,9 +33,9 @@ func startMockSMTP(t *testing.T) (host, port string, body func() string) {
 		if err != nil {
 			return
 		}
-		defer conn.Close()
+		defer func() { _ = conn.Close() }()
 
-		fmt.Fprintf(conn, "220 localhost SMTP\r\n")
+		_, _ = fmt.Fprintf(conn, "220 localhost SMTP\r\n")
 
 		inData := false
 		scanner := bufio.NewScanner(conn)
@@ -44,7 +44,7 @@ func startMockSMTP(t *testing.T) (host, port string, body func() string) {
 
 			if inData {
 				if line == "." {
-					fmt.Fprintf(conn, "250 OK\r\n")
+					_, _ = fmt.Fprintf(conn, "250 OK\r\n")
 					inData = false
 				} else {
 					mu.Lock()
@@ -58,18 +58,18 @@ func startMockSMTP(t *testing.T) (host, port string, body func() string) {
 			switch {
 			case strings.HasPrefix(upper, "EHLO"), strings.HasPrefix(upper, "HELO"):
 				// Advertise AUTH PLAIN so smtp.PlainAuth proceeds.
-				fmt.Fprintf(conn, "250-localhost\r\n250 AUTH PLAIN LOGIN\r\n")
+				_, _ = fmt.Fprintf(conn, "250-localhost\r\n250 AUTH PLAIN LOGIN\r\n")
 			case strings.HasPrefix(upper, "AUTH"):
-				fmt.Fprintf(conn, "235 OK\r\n")
+				_, _ = fmt.Fprintf(conn, "235 OK\r\n")
 			case strings.HasPrefix(upper, "MAIL"):
-				fmt.Fprintf(conn, "250 OK\r\n")
+				_, _ = fmt.Fprintf(conn, "250 OK\r\n")
 			case strings.HasPrefix(upper, "RCPT"):
-				fmt.Fprintf(conn, "250 OK\r\n")
+				_, _ = fmt.Fprintf(conn, "250 OK\r\n")
 			case upper == "DATA":
-				fmt.Fprintf(conn, "354 Start mail input\r\n")
+				_, _ = fmt.Fprintf(conn, "354 Start mail input\r\n")
 				inData = true
 			case strings.HasPrefix(upper, "QUIT"):
-				fmt.Fprintf(conn, "221 Bye\r\n")
+				_, _ = fmt.Fprintf(conn, "221 Bye\r\n")
 				return
 			}
 		}

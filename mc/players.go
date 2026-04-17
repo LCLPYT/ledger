@@ -2,6 +2,7 @@ package mc
 
 import (
 	"context"
+	"errors"
 	dbsqlc "ledger/db/sqlc"
 	"ledger/models"
 	"ledger/mojang"
@@ -30,7 +31,7 @@ func UpsertPlayer(pool *pgxpool.Pool, q *dbsqlc.Queries, uuid string) (int64, er
 	ctx := context.Background()
 
 	id, err := q.InsertPlayerByUUID(ctx, uuid)
-	if err != nil && err == pgx.ErrNoRows {
+	if err != nil && errors.Is(err, pgx.ErrNoRows) {
 		// Player already existed — fetch id and username cache timestamp.
 		row, err := q.GetPlayerIDAndFetchTime(ctx, uuid)
 		if err != nil {
@@ -53,7 +54,7 @@ func UpsertPlayer(pool *pgxpool.Pool, q *dbsqlc.Queries, uuid string) (int64, er
 func GetPlayerID(pool *pgxpool.Pool, uuid string) (int64, error) {
 	q := dbsqlc.New(pool)
 	row, err := q.GetPlayerByUUID(context.Background(), uuid)
-	if err == pgx.ErrNoRows {
+	if errors.Is(err, pgx.ErrNoRows) {
 		return 0, nil
 	}
 	return row.ID, err
@@ -86,8 +87,7 @@ func QueryPlayer(pool *pgxpool.Pool, uid string) (models.MinecraftPlayer, *time.
 
 	var fetchedAt *time.Time
 	if row.UsernameFetchedAt.Valid {
-		t := row.UsernameFetchedAt.Time
-		fetchedAt = &t
+		fetchedAt = new(row.UsernameFetchedAt.Time)
 	}
 	return p, fetchedAt, nil
 }
@@ -114,8 +114,7 @@ func rowToPlayer(row dbsqlc.GetPlayerByUUIDRow) models.MinecraftPlayer {
 		CreatedAt: row.CreatedAt.Time,
 	}
 	if row.Username.Valid {
-		s := row.Username.String
-		p.Username = &s
+		p.Username = new(row.Username.String)
 	}
 	return p
 }

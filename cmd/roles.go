@@ -13,15 +13,15 @@ import (
 
 func RunRoles(args []string) {
 	if len(args) < 1 {
-		fmt.Fprintln(os.Stderr, "Usage:")
-		fmt.Fprintln(os.Stderr, "  ledger roles init  Initialize default and admin roles")
+		_, _ = fmt.Fprintln(os.Stderr, "Usage:")
+		_, _ = fmt.Fprintln(os.Stderr, "  ledger roles init  Initialize default and admin roles")
 		os.Exit(1)
 	}
 	switch args[0] {
 	case "init":
 		runInitRoles()
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown roles command: %s\n", args[0])
+		_, _ = fmt.Fprintf(os.Stderr, "Unknown roles command: %s\n", args[0])
 		os.Exit(1)
 	}
 }
@@ -45,9 +45,8 @@ func runInitRoles() {
 		return []string{role, parts[0], parts[1]}
 	}
 
-	defaultPerms := []string{perms.UserRead, perms.UserCreateToken}
 	var policies [][]string
-	for _, p := range defaultPerms {
+	for _, p := range perms.DefaultPermissions {
 		policies = append(policies, permPolicy("default", p))
 	}
 	policies = append(policies, []string{"admin", "*", "*"})

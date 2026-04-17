@@ -36,7 +36,7 @@ func InitDB(dsn string) *pgxpool.Pool {
 
 	// Wrap pool as *sql.DB solely for the migrate driver.
 	sqlDB := stdlib.OpenDBFromPool(pool)
-	defer sqlDB.Close()
+	defer func() { _ = sqlDB.Close() }()
 
 	driver, err := pgxmigrate.WithInstance(sqlDB, &pgxmigrate.Config{})
 	if err != nil {

@@ -114,7 +114,7 @@ func SetPlayerData(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer tx.Rollback(ctx) //nolint:errcheck
+		defer func() { _ = tx.Rollback(ctx) }()
 
 		q := dbsqlc.New(tx)
 		playerID, err := mc.UpsertPlayer(pool, q, uid)

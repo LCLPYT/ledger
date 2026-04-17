@@ -59,7 +59,7 @@ func AwardCoins(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer tx.Rollback(ctx) //nolint:errcheck
+		defer func() { _ = tx.Rollback(ctx) }()
 
 		q := dbsqlc.New(tx)
 		playerID, err := mc.UpsertPlayer(pool, q, uid)
@@ -130,7 +130,7 @@ func SpendCoins(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer tx.Rollback(ctx) //nolint:errcheck
+		defer func() { _ = tx.Rollback(ctx) }()
 
 		q := dbsqlc.New(tx)
 		current, err := q.GetLockedBalance(ctx, playerID)
@@ -197,7 +197,7 @@ func AdjustCoins(pool *pgxpool.Pool) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer tx.Rollback(ctx) //nolint:errcheck
+		defer func() { _ = tx.Rollback(ctx) }()
 
 		q := dbsqlc.New(tx)
 		playerID, err := mc.UpsertPlayer(pool, q, uid)
@@ -309,16 +309,13 @@ func GetPlayerTransactions(pool *pgxpool.Pool) gin.HandlerFunc {
 				CreatedAt: r.CreatedAt.Time,
 			}
 			if r.Description.Valid {
-				s := r.Description.String
-				t.Description = &s
+				t.Description = new(r.Description.String)
 			}
 			if r.ActorUserID.Valid {
-				n := r.ActorUserID.Int64
-				t.ActorUserID = &n
+				t.ActorUserID = new(r.ActorUserID.Int64)
 			}
 			if r.ActorTokenID.Valid {
-				n := r.ActorTokenID.Int64
-				t.ActorTokenID = &n
+				t.ActorTokenID = new(r.ActorTokenID.Int64)
 			}
 			transactions = append(transactions, t)
 		}
