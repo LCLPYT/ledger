@@ -1,12 +1,14 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
 	"ledger/mc"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
+	dbsqlc "ledger/db/sqlc"
 	"ledger/handlers"
 	"ledger/middleware"
 	"ledger/models"
@@ -23,8 +25,8 @@ func awardCoinsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/api/v1/minecraft/players/:uuid/coins/award",
-		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsWrite),
-		handlers.AwardCoins(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.CoinsWrite),
+		handlers.AwardCoins(testPool))
 	return r
 }
 
@@ -32,8 +34,8 @@ func spendCoinsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/api/v1/minecraft/players/:uuid/coins/spend",
-		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsWrite),
-		handlers.SpendCoins(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.CoinsWrite),
+		handlers.SpendCoins(testPool))
 	return r
 }
 
@@ -41,8 +43,8 @@ func adjustCoinsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/api/v1/minecraft/players/:uuid/coins/adjust",
-		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsWrite),
-		handlers.AdjustCoins(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.CoinsWrite),
+		handlers.AdjustCoins(testPool))
 	return r
 }
 
@@ -50,8 +52,8 @@ func getPlayerCoinsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/api/v1/minecraft/players/:uuid/coins",
-		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsRead),
-		handlers.GetPlayerCoins(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.CoinsRead),
+		handlers.GetPlayerCoins(testPool))
 	return r
 }
 
@@ -59,8 +61,8 @@ func getPlayerTransactionsRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/api/v1/minecraft/players/:uuid/coins/transactions",
-		middleware.AuthRequired(testEnforcer, testDB, perms.CoinsRead),
-		handlers.GetPlayerTransactions(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.CoinsRead),
+		handlers.GetPlayerTransactions(testPool))
 	return r
 }
 
@@ -68,8 +70,8 @@ func listPlayersRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/api/v1/minecraft/players",
-		middleware.AuthRequired(testEnforcer, testDB, perms.PlayerRead),
-		handlers.ListPlayers(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.PlayerRead),
+		handlers.ListPlayers(testPool))
 	return r
 }
 
@@ -77,11 +79,9 @@ func listPlayersRouter() *gin.Engine {
 
 func mustCreatePlayer(t *testing.T, uuid string) int64 {
 	t.Helper()
-	tx, err := testDB.Begin()
+	q := dbsqlc.New(testPool)
+	id, err := mc.UpsertPlayer(testPool, q, uuid)
 	require.NoError(t, err)
-	id, err := mc.UpsertPlayer(testDB, tx, uuid)
-	require.NoError(t, err)
-	require.NoError(t, tx.Commit())
 	return id
 }
 
@@ -89,17 +89,19 @@ func mustCreatePlayer(t *testing.T, uuid string) int64 {
 
 func TestUpsertPlayer_NewPlayer(t *testing.T) {
 	cleanDB(t)
-	tx, err := testDB.Begin()
+	ctx := context.Background()
+	tx, err := testPool.Begin(ctx)
 	require.NoError(t, err)
-	defer func() { _ = tx.Rollback() }()
+	defer func() { _ = tx.Rollback(ctx) }()
 
-	id, err := mc.UpsertPlayer(testDB, tx, "069a79f4-44e9-4726-a5be-fca90e38aaf5")
+	q := dbsqlc.New(tx)
+	id, err := mc.UpsertPlayer(testPool, q, "069a79f4-44e9-4726-a5be-fca90e38aaf5")
 	require.NoError(t, err)
 	assert.Greater(t, id, int64(0))
-	require.NoError(t, tx.Commit())
+	require.NoError(t, tx.Commit(ctx))
 
 	var count int
-	require.NoError(t, testDB.QueryRow(
+	require.NoError(t, testPool.QueryRow(ctx,
 		"SELECT COUNT(*) FROM minecraft_players WHERE id = $1", id,
 	).Scan(&count))
 	assert.Equal(t, 1, count)
@@ -108,25 +110,26 @@ func TestUpsertPlayer_NewPlayer(t *testing.T) {
 func TestUpsertPlayer_ExistingPlayerReturnsSameID(t *testing.T) {
 	cleanDB(t)
 	const playerUUID = "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+	ctx := context.Background()
 
-	tx1, err := testDB.Begin()
+	tx1, err := testPool.Begin(ctx)
 	require.NoError(t, err)
-	id1, err := mc.UpsertPlayer(testDB, tx1, playerUUID)
+	id1, err := mc.UpsertPlayer(testPool, dbsqlc.New(tx1), playerUUID)
 	require.NoError(t, err)
-	require.NoError(t, tx1.Commit())
+	require.NoError(t, tx1.Commit(ctx))
 
-	tx2, err := testDB.Begin()
+	tx2, err := testPool.Begin(ctx)
 	require.NoError(t, err)
-	id2, err := mc.UpsertPlayer(testDB, tx2, playerUUID)
+	id2, err := mc.UpsertPlayer(testPool, dbsqlc.New(tx2), playerUUID)
 	require.NoError(t, err)
-	require.NoError(t, tx2.Commit())
+	require.NoError(t, tx2.Commit(ctx))
 
 	assert.Equal(t, id1, id2)
 }
 
 func mustSetBalance(t *testing.T, playerID, balance int64) {
 	t.Helper()
-	_, err := testDB.Exec(
+	_, err := testPool.Exec(context.Background(),
 		`INSERT INTO coin_balances (player_id, balance) VALUES ($1, $2)
 		 ON CONFLICT (player_id) DO UPDATE SET balance = $2`,
 		playerID, balance,
@@ -137,7 +140,7 @@ func mustSetBalance(t *testing.T, playerID, balance int64) {
 func getBalance(t *testing.T, playerID int64) int64 {
 	t.Helper()
 	var b int64
-	err := testDB.QueryRow(
+	err := testPool.QueryRow(context.Background(),
 		"SELECT COALESCE((SELECT balance FROM coin_balances WHERE player_id = $1), 0)",
 		playerID,
 	).Scan(&b)
@@ -148,7 +151,7 @@ func getBalance(t *testing.T, playerID int64) int64 {
 func countTransactions(t *testing.T, playerID int64) int {
 	t.Helper()
 	var n int
-	err := testDB.QueryRow(
+	err := testPool.QueryRow(context.Background(),
 		"SELECT COUNT(*) FROM coin_transactions WHERE player_id = $1", playerID,
 	).Scan(&n)
 	require.NoError(t, err)
@@ -175,7 +178,7 @@ func TestAwardCoins_NewPlayer(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 	assert.Equal(t, float64(100), resp["balance"])
 
-	playerID, err := mc.GetPlayerID(testDB, uuid)
+	playerID, err := mc.GetPlayerID(testPool, uuid)
 	require.NoError(t, err)
 	assert.NotZero(t, playerID)
 	assert.Equal(t, int64(100), getBalance(t, playerID))
@@ -365,7 +368,7 @@ func TestAdjustCoins_PositiveCreatesPlayer(t *testing.T) {
 	require.NoError(t, json.NewDecoder(w.Body).Decode(&resp))
 	assert.Equal(t, float64(50), resp["balance"])
 
-	playerID, err := mc.GetPlayerID(testDB, uuid)
+	playerID, err := mc.GetPlayerID(testPool, uuid)
 	require.NoError(t, err)
 	assert.NotZero(t, playerID)
 	assert.Equal(t, int64(50), getBalance(t, playerID))

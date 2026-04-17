@@ -1,7 +1,7 @@
 package handlers_test
 
 import (
-	"database/sql"
+	"context"
 	"ledger/mc"
 	"os"
 	"strconv"
@@ -13,12 +13,12 @@ import (
 	appdb "ledger/db"
 
 	"github.com/casbin/casbin/v3"
-	"github.com/jackc/pgx/v5/stdlib"
+	"github.com/jackc/pgx/v5/pgxpool"
 	"golang.org/x/crypto/bcrypt"
 )
 
 var (
-	testDB       *sql.DB
+	testPool     *pgxpool.Pool
 	testEnforcer *casbin.Enforcer
 )
 
@@ -33,27 +33,25 @@ func TestMain(m *testing.M) {
 		dsn = "postgres://db:db@localhost:5433/db?sslmode=disable"
 	}
 
-	pool := appdb.InitDB(dsn)
-	testDB = stdlib.OpenDBFromPool(pool)
+	testPool = appdb.InitDB(dsn)
 	testEnforcer = appdb.InitCasbin(dsn)
 
 	code := m.Run()
-	testDB.Close()
 	os.Exit(code)
 }
 
 func cleanDB(t *testing.T) {
 	t.Helper()
-	_, err := testDB.Exec(
-		`TRUNCATE 
-			access_tokens, 
-			sessions, 
-			users, 
-			user_invitations, 
-			roles, 
-			coin_transactions, 
-			coin_balances, 
-			minecraft_players 
+	_, err := testPool.Exec(context.Background(),
+		`TRUNCATE
+			access_tokens,
+			sessions,
+			users,
+			user_invitations,
+			roles,
+			coin_transactions,
+			coin_balances,
+			minecraft_players
 			RESTART IDENTITY CASCADE`,
 	)
 	if err != nil {
@@ -67,7 +65,7 @@ func cleanDB(t *testing.T) {
 
 func mustCreateSession(t *testing.T, userID int64) string {
 	t.Helper()
-	token, err := auth.GenerateSessionToken(strconv.FormatInt(userID, 10), testDB)
+	token, err := auth.GenerateSessionToken(strconv.FormatInt(userID, 10), testPool)
 	if err != nil {
 		t.Fatalf("mustCreateSession: %v", err)
 	}
@@ -76,7 +74,7 @@ func mustCreateSession(t *testing.T, userID int64) string {
 
 func mustCreateRole(t *testing.T, name string) {
 	t.Helper()
-	_, err := testDB.Exec("INSERT INTO roles (name) VALUES ($1)", name)
+	_, err := testPool.Exec(context.Background(), "INSERT INTO roles (name) VALUES ($1)", name)
 	if err != nil {
 		t.Fatalf("mustCreateRole: %v", err)
 	}
@@ -89,8 +87,8 @@ func mustCreateUser(t *testing.T, username, email, password string) int64 {
 		t.Fatalf("mustCreateUser hash: %v", err)
 	}
 	var id int64
-	err = testDB.QueryRow(
-		`INSERT INTO users (username, email, password_hash, verified_at) 
+	err = testPool.QueryRow(context.Background(),
+		`INSERT INTO users (username, email, password_hash, verified_at)
 		VALUES ($1, $2, $3, now()) RETURNING id`,
 		username, email, hash,
 	).Scan(&id)
@@ -105,7 +103,7 @@ func mustCreateUser(t *testing.T, username, email, password string) int64 {
 func mustCreateShellUser(t *testing.T, username, email string) int64 {
 	t.Helper()
 	var id int64
-	err := testDB.QueryRow(
+	err := testPool.QueryRow(context.Background(),
 		"INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id",
 		username, email,
 	).Scan(&id)
@@ -117,7 +115,7 @@ func mustCreateShellUser(t *testing.T, username, email string) int64 {
 
 func mustCreateInvitation(t *testing.T, userID int64, token string, expiresAt time.Time) {
 	t.Helper()
-	_, err := testDB.Exec(
+	_, err := testPool.Exec(context.Background(),
 		"INSERT INTO user_invitations (user_id, token, expires_at) VALUES ($1, $2, $3)",
 		userID, token, expiresAt,
 	)
@@ -159,7 +157,7 @@ func mustAssignUserToRole(t *testing.T, userID int64, roleName string) {
 
 func mustCreateToken(t *testing.T, userID int64, scopes []string) string {
 	t.Helper()
-	token, err := auth.GenerateToken(strconv.FormatInt(userID, 10), scopes, time.Now().Add(time.Hour), testDB, "test")
+	token, err := auth.GenerateToken(strconv.FormatInt(userID, 10), scopes, time.Now().Add(time.Hour), testPool, "test")
 	if err != nil {
 		t.Fatalf("mustCreateToken: %v", err)
 	}

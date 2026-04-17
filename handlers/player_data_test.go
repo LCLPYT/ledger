@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -21,24 +22,24 @@ func playerDataRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/api/v1/minecraft/players/:uuid/data",
-		middleware.AuthRequired(testEnforcer, testDB, perms.PlayerDataRead),
-		handlers.GetPlayerData(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.PlayerDataRead),
+		handlers.GetPlayerData(testPool))
 	r.GET("/api/v1/minecraft/players/:uuid/data/*path",
-		middleware.AuthRequired(testEnforcer, testDB, perms.PlayerDataRead),
-		handlers.GetPlayerData(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.PlayerDataRead),
+		handlers.GetPlayerData(testPool))
 	r.PUT("/api/v1/minecraft/players/:uuid/data/*path",
-		middleware.AuthRequired(testEnforcer, testDB, perms.PlayerDataWrite),
-		handlers.SetPlayerData(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.PlayerDataWrite),
+		handlers.SetPlayerData(testPool))
 	r.DELETE("/api/v1/minecraft/players/:uuid/data/*path",
-		middleware.AuthRequired(testEnforcer, testDB, perms.PlayerDataWrite),
-		handlers.DeletePlayerData(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.PlayerDataWrite),
+		handlers.DeletePlayerData(testPool))
 	return r
 }
 
 // mustSetPlayerData writes directly to the DB for test setup.
 func mustSetPlayerData(t *testing.T, uuid string, dataJSON string) {
 	t.Helper()
-	_, err := testDB.Exec(
+	_, err := testPool.Exec(context.Background(),
 		`UPDATE minecraft_players SET data = $1::jsonb WHERE uuid = $2`,
 		dataJSON, uuid,
 	)
@@ -48,7 +49,7 @@ func mustSetPlayerData(t *testing.T, uuid string, dataJSON string) {
 func getPlayerData(t *testing.T, uuid string) json.RawMessage {
 	t.Helper()
 	var raw []byte
-	err := testDB.QueryRow(
+	err := testPool.QueryRow(context.Background(),
 		`SELECT data FROM minecraft_players WHERE uuid = $1`, uuid,
 	).Scan(&raw)
 	require.NoError(t, err)

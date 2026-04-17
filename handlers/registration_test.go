@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -20,22 +21,22 @@ func createUserRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/api/v1/users",
-		middleware.AuthRequired(testEnforcer, testDB, perms.UsersCreate),
-		handlers.CreateUser(testDB, testEnforcer))
+		middleware.AuthRequired(testEnforcer, testPool, perms.UsersCreate),
+		handlers.CreateUser(testPool, testEnforcer))
 	return r
 }
 
 func verifyInvitationRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/auth/verify-invitation", handlers.VerifyInvitation(testDB))
+	r.POST("/api/v1/auth/verify-invitation", handlers.VerifyInvitation(testPool))
 	return r
 }
 
 func changePasswordRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.PUT("/api/v1/user/password", middleware.SessionRequired(testDB), handlers.ChangePassword(testDB))
+	r.PUT("/api/v1/user/password", middleware.SessionRequired(testPool), handlers.ChangePassword(testPool))
 	return r
 }
 
@@ -61,13 +62,13 @@ func TestCreateUser_Success(t *testing.T) {
 
 	// User must exist in DB
 	var userID int64
-	require.NoError(t, testDB.QueryRow(
+	require.NoError(t, testPool.QueryRow(context.Background(),
 		"SELECT id FROM users WHERE username = 'newuser'",
 	).Scan(&userID))
 
 	// Invitation row must exist and be unused
 	var count int
-	require.NoError(t, testDB.QueryRow(
+	require.NoError(t, testPool.QueryRow(context.Background(),
 		"SELECT COUNT(*) FROM user_invitations WHERE user_id = $1 AND used_at IS NULL",
 		userID,
 	).Scan(&count))
@@ -171,14 +172,14 @@ func TestVerifyInvitation_Success(t *testing.T) {
 
 	// verified_at must be set
 	var verifiedAt *time.Time
-	require.NoError(t, testDB.QueryRow(
+	require.NoError(t, testPool.QueryRow(context.Background(),
 		"SELECT verified_at FROM users WHERE id = $1", userID,
 	).Scan(&verifiedAt))
 	assert.NotNil(t, verifiedAt)
 
 	// Invitation must be marked used
 	var usedAt *time.Time
-	require.NoError(t, testDB.QueryRow(
+	require.NoError(t, testPool.QueryRow(context.Background(),
 		"SELECT used_at FROM user_invitations WHERE token = 'validtok'",
 	).Scan(&usedAt))
 	assert.NotNil(t, usedAt)
@@ -220,7 +221,7 @@ func TestVerifyInvitation_ExpiredToken(t *testing.T) {
 	cleanDB(t)
 	userID := mustCreateShellUser(t, "newuser", "new@example.com")
 	// Use DB-side now() to avoid host↔container clock conversion issues.
-	_, err := testDB.Exec(
+	_, err := testPool.Exec(context.Background(),
 		"INSERT INTO user_invitations (user_id, token, expires_at) VALUES ($1, $2, now() - interval '1 minute')",
 		userID, "expiredtok",
 	)
@@ -286,7 +287,7 @@ func TestVerifyInvitation_WeakPassword(t *testing.T) {
 
 	// Token must still be unused — no weak-password attempt should consume it
 	var usedAt *time.Time
-	require.NoError(t, testDB.QueryRow(
+	require.NoError(t, testPool.QueryRow(context.Background(),
 		"SELECT used_at FROM user_invitations WHERE token = 'tok'",
 	).Scan(&usedAt))
 	assert.Nil(t, usedAt)

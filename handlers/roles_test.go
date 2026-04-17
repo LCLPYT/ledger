@@ -19,8 +19,8 @@ func createRoleRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/api/v1/roles",
-		middleware.AuthRequired(testEnforcer, testDB, perms.RolesCreate),
-		handlers.CreateRole(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, perms.RolesCreate),
+		handlers.CreateRole(testPool))
 	return r
 }
 
@@ -28,11 +28,11 @@ func roleUsersRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/api/v1/roles/:role/users",
-		middleware.AuthRequired(testEnforcer, testDB, perms.RolesManageUsers),
-		handlers.AddUserToRole(testDB, testEnforcer))
+		middleware.AuthRequired(testEnforcer, testPool, perms.RolesManageUsers),
+		handlers.AddUserToRole(testPool, testEnforcer))
 	r.DELETE("/api/v1/roles/:role/users",
-		middleware.AuthRequired(testEnforcer, testDB, perms.RolesManageUsers),
-		handlers.RemoveUserFromRole(testDB, testEnforcer))
+		middleware.AuthRequired(testEnforcer, testPool, perms.RolesManageUsers),
+		handlers.RemoveUserFromRole(testPool, testEnforcer))
 	return r
 }
 

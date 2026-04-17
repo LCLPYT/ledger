@@ -1,6 +1,7 @@
 package handlers_test
 
 import (
+	"context"
 	"encoding/json"
 	"ledger/auth"
 	"ledger/middleware"
@@ -22,14 +23,14 @@ import (
 func refreshSessionRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/user/session/refresh", middleware.SessionRequired(testDB), handlers.RefreshSession(testDB))
+	r.POST("/api/v1/user/session/refresh", middleware.SessionRequired(testPool), handlers.RefreshSession(testPool))
 	return r
 }
 
 func loginRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
-	r.POST("/api/v1/user/login", middleware.NotAuthenticated, handlers.Login(testDB))
+	r.POST("/api/v1/user/login", middleware.NotAuthenticated, handlers.Login(testPool))
 	return r
 }
 
@@ -37,8 +38,8 @@ func createTokenRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.POST("/api/v1/user/token",
-		middleware.AuthRequired(testEnforcer, testDB, "user.create_token"),
-		handlers.CreateToken(testDB, testEnforcer))
+		middleware.AuthRequired(testEnforcer, testPool, "user.create_token"),
+		handlers.CreateToken(testPool, testEnforcer))
 	return r
 }
 
@@ -46,8 +47,8 @@ func getUserRouter() *gin.Engine {
 	gin.SetMode(gin.TestMode)
 	r := gin.New()
 	r.GET("/api/v1/user",
-		middleware.AuthRequired(testEnforcer, testDB, "user.read"),
-		handlers.GetUser(testDB))
+		middleware.AuthRequired(testEnforcer, testPool, "user.read"),
+		handlers.GetUser(testPool))
 	return r
 }
 
@@ -226,7 +227,7 @@ func TestCreateToken_StoredInDB(t *testing.T) {
 	require.Equal(t, http.StatusOK, w.Code)
 
 	var count int
-	err := testDB.QueryRow(
+	err := testPool.QueryRow(context.Background(),
 		"SELECT COUNT(*) FROM access_tokens WHERE user_id = $1 AND name = 'mytoken' AND revoked = false",
 		userID,
 	).Scan(&count)
@@ -265,7 +266,7 @@ func TestGetUser_RevokedToken(t *testing.T) {
 	mustAddPermission(t, userID, perms.UserRead)
 	token := mustCreateToken(t, userID, []string{"user.read"})
 
-	_, err := testDB.Exec("UPDATE access_tokens SET revoked = true WHERE user_id = $1", userID)
+	_, err := testPool.Exec(context.Background(), "UPDATE access_tokens SET revoked = true WHERE user_id = $1", userID)
 	require.NoError(t, err)
 
 	w := httptest.NewRecorder()
@@ -438,7 +439,7 @@ func TestRefreshSession_ExpiredSessionToken(t *testing.T) {
 		strconv.FormatInt(userID, 10),
 		[]string{"user.read"},
 		time.Now().Add(-time.Hour),
-		testDB,
+		testPool,
 		"expired",
 	)
 	require.NoError(t, err)
