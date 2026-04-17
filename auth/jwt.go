@@ -32,17 +32,12 @@ type Claims struct {
 // GenerateSessionToken generates a session token intended for graphical frontends.
 // Session tokens implicitly grant all permissions that the user has.
 // Session tokens are stored in the database and can be revoked.
-func GenerateSessionToken(userID string, pool *pgxpool.Pool) (string, error) {
+func GenerateSessionToken(userID int64, pool *pgxpool.Pool) (string, error) {
 	expiry := time.Now().Add(SessionLifetime)
-
-	userIDInt, err := strconv.ParseInt(userID, 10, 64)
-	if err != nil {
-		return "", err
-	}
 
 	q := dbsqlc.New(pool)
 	sessionID, err := q.InsertSession(context.Background(), dbsqlc.InsertSessionParams{
-		UserID:    userIDInt,
+		UserID:    userID,
 		ExpiresAt: pgtype.Timestamp{Time: expiry, Valid: true},
 	})
 	if err != nil {
@@ -50,7 +45,7 @@ func GenerateSessionToken(userID string, pool *pgxpool.Pool) (string, error) {
 	}
 
 	claims := &Claims{
-		UserID:  userID,
+		UserID:  strconv.FormatInt(userID, 10),
 		TokenId: "",
 		Type:    TypeSession,
 		RegisteredClaims: jwt.RegisteredClaims{

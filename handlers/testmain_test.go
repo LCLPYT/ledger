@@ -65,7 +65,7 @@ func cleanDB(t *testing.T) {
 
 func mustCreateSession(t *testing.T, userID int64) string {
 	t.Helper()
-	token, err := auth.GenerateSessionToken(strconv.FormatInt(userID, 10), testPool)
+	token, err := auth.GenerateSessionToken(userID, testPool)
 	if err != nil {
 		t.Fatalf("mustCreateSession: %v", err)
 	}

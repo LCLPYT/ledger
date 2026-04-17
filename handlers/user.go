@@ -47,8 +47,7 @@ func Login(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		userIDStr := strconv.FormatInt(row.ID, 10)
-		token, err := auth.GenerateSessionToken(userIDStr, pool)
+		token, err := auth.GenerateSessionToken(row.ID, pool)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 			return
