@@ -1,12 +1,13 @@
 package handlers
 
 import (
+	"context"
 	"crypto/rand"
-	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"ledger/auth"
+	dbsqlc "ledger/db/sqlc"
 	"ledger/email"
 	"ledger/models"
 	"ledger/perms"
@@ -20,10 +21,13 @@ import (
 	"github.com/casbin/casbin/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func Login(db *sql.DB) gin.HandlerFunc {
+func Login(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.LoginRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -31,27 +35,20 @@ func Login(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var userID int64
-		var passwordHash []byte
-		err := db.QueryRow(
-			"SELECT id, password_hash FROM users WHERE (username = $1 OR email = $1) AND verified_at IS NOT NULL",
-			req.Identifier,
-		).Scan(&userID, &passwordHash)
-
+		q := dbsqlc.New(pool)
+		row, err := q.GetUserByIdentifier(c.Request.Context(), req.Identifier)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid username or email"})
 			return
 		}
 
-		err = util.VerifyPassword(passwordHash, []byte(req.Password))
-		if err != nil {
+		if err := util.VerifyPassword(row.PasswordHash, []byte(req.Password)); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid password"})
 			return
 		}
 
-		userIDStr := strconv.FormatInt(userID, 10)
-
-		token, err := auth.GenerateSessionToken(userIDStr, db)
+		userIDStr := strconv.FormatInt(row.ID, 10)
+		token, err := auth.GenerateSessionToken(userIDStr, pool)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 			return
@@ -61,22 +58,30 @@ func Login(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func RefreshSession(db *sql.DB) gin.HandlerFunc {
+func RefreshSession(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetString("userID")
 		sessionID := c.GetString("sessionID")
 
-		expiry := time.Now().Add(auth.SessionLifetime)
-		result, err := db.Exec(
-			"UPDATE sessions SET expires_at = $1 WHERE id = $2 AND user_id = $3",
-			expiry, sessionID, userID,
-		)
+		userIDInt, err := strconv.ParseInt(userID, 10, 64)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
 			return
 		}
-		n, err := result.RowsAffected()
-		if err != nil || n == 0 {
+		sessionIDInt, err := strconv.ParseInt(sessionID, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid session id"})
+			return
+		}
+
+		expiry := time.Now().Add(auth.SessionLifetime)
+		q := dbsqlc.New(pool)
+		result, err := q.RefreshSession(c.Request.Context(), dbsqlc.RefreshSessionParams{
+			ExpiresAt: pgtype.Timestamp{Time: expiry, Valid: true},
+			ID:        sessionIDInt,
+			UserID:    userIDInt,
+		})
+		if err != nil || result.RowsAffected() == 0 {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "session not found"})
 			return
 		}
@@ -90,7 +95,7 @@ func RefreshSession(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func CreateToken(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+func CreateToken(pool *pgxpool.Pool, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.TokenRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -119,7 +124,7 @@ func CreateToken(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 			}
 		}
 
-		token, err := auth.GenerateToken(userID, req.Scopes, req.Expiry, db, req.Name)
+		token, err := auth.GenerateToken(userID, req.Scopes, req.Expiry, pool, req.Name)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "token generation failed"})
 			return
@@ -129,61 +134,66 @@ func CreateToken(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	}
 }
 
-func ListTokens(db *sql.DB) gin.HandlerFunc {
+func ListTokens(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetString("userID")
+		userIDInt, err := strconv.ParseInt(userID, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+			return
+		}
 
-		rows, err := db.Query(
-			"SELECT id, name, created_at, expires_at, revoked, scopes FROM access_tokens WHERE user_id = $1 ORDER BY created_at DESC",
-			userID,
-		)
+		q := dbsqlc.New(pool)
+		rows, err := q.ListTokens(c.Request.Context(), userIDInt)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer func() { _ = rows.Close() }()
 
-		tokens := make([]models.AccessToken, 0)
-		for rows.Next() {
-			var t models.AccessToken
-			var scopesJSON []byte
-			if err := rows.Scan(&t.ID, &t.Name, &t.CreatedAt, &t.ExpiresAt, &t.Revoked, &scopesJSON); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-				return
+		tokens := make([]models.AccessToken, 0, len(rows))
+		for _, r := range rows {
+			var scopes []string
+			if err := json.Unmarshal(r.Scopes, &scopes); err != nil {
+				scopes = []string{}
 			}
-			if err := json.Unmarshal(scopesJSON, &t.Scopes); err != nil {
-				t.Scopes = []string{}
-			}
-			tokens = append(tokens, t)
-		}
-		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
+			tokens = append(tokens, models.AccessToken{
+				ID:        r.ID,
+				Name:      r.Name,
+				CreatedAt: r.CreatedAt.Time,
+				ExpiresAt: r.ExpiresAt.Time,
+				Revoked:   r.Revoked.Bool,
+				Scopes:    scopes,
+			})
 		}
 
 		c.JSON(http.StatusOK, tokens)
 	}
 }
 
-func RevokeToken(db *sql.DB) gin.HandlerFunc {
+func RevokeToken(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetString("userID")
-		tokenID := c.Param("id")
+		userIDInt, err := strconv.ParseInt(userID, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+			return
+		}
+		tokenID, err := strconv.ParseInt(c.Param("id"), 10, 64)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid token id"})
+			return
+		}
 
-		result, err := db.Exec(
-			"UPDATE access_tokens SET revoked = TRUE WHERE id = $1 AND user_id = $2 AND revoked = FALSE",
-			tokenID, userID,
-		)
+		q := dbsqlc.New(pool)
+		result, err := q.RevokeToken(c.Request.Context(), dbsqlc.RevokeTokenParams{
+			ID:     tokenID,
+			UserID: userIDInt,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		n, err := result.RowsAffected()
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-		if n == 0 {
+		if result.RowsAffected() == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "token not found or already revoked"})
 			return
 		}
@@ -192,60 +202,60 @@ func RevokeToken(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func ListUsers(db *sql.DB) gin.HandlerFunc {
+func ListUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		rows, err := db.Query("SELECT id, username, email, created_at FROM users ORDER BY created_at DESC")
+		q := dbsqlc.New(pool)
+		rows, err := q.ListUsers(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer func() { _ = rows.Close() }()
 
-		users := make([]models.User, 0)
-		for rows.Next() {
-			var u models.User
-			if err := rows.Scan(&u.ID, &u.Username, &u.Email, &u.Created); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-				return
-			}
-			users = append(users, u)
-		}
-		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
+		users := make([]models.User, 0, len(rows))
+		for _, r := range rows {
+			users = append(users, models.User{
+				ID:       r.ID,
+				Username: r.Username,
+				Email:    r.Email,
+				Created:  r.CreatedAt.Time,
+			})
 		}
 
 		c.JSON(http.StatusOK, users)
 	}
 }
 
-func GetUser(db *sql.DB) gin.HandlerFunc {
+func GetUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		userID := c.GetString("userID")
-
-		var user models.User
-
-		err := db.QueryRow(
-			"SELECT id, username, email, created_at FROM users WHERE id = $1",
-			userID,
-		).Scan(&user.ID, &user.Username, &user.Email, &user.Created)
-
+		userIDInt, err := strconv.ParseInt(userID, 10, 64)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+			return
+		}
+
+		q := dbsqlc.New(pool)
+		row, err := q.GetUserByID(c.Request.Context(), userIDInt)
+		if err != nil {
+			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 				return
 			}
-
 			log.Printf("Failed to query user: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		c.JSON(http.StatusOK, user)
+		c.JSON(http.StatusOK, models.User{
+			ID:       row.ID,
+			Username: row.Username,
+			Email:    row.Email,
+			Created:  row.CreatedAt.Time,
+		})
 	}
 }
 
-func CreateUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+func CreateUser(pool *pgxpool.Pool, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.CreateUserRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -253,11 +263,11 @@ func CreateUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 			return
 		}
 
-		var user models.User
-		err := db.QueryRow(
-			"INSERT INTO users (username, email) VALUES ($1, $2) RETURNING id, username, email, created_at",
-			req.Username, req.Email,
-		).Scan(&user.ID, &user.Username, &user.Email, &user.Created)
+		q := dbsqlc.New(pool)
+		row, err := q.CreateShellUser(c.Request.Context(), dbsqlc.CreateShellUserParams{
+			Username: req.Username,
+			Email:    req.Email,
+		})
 		if err != nil {
 			if pqErr, ok := errors.AsType[*pgconn.PgError](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
 				c.JSON(http.StatusConflict, gin.H{"error": "username or email already exists"})
@@ -265,6 +275,13 @@ func CreateUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 			}
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
+		}
+
+		user := models.User{
+			ID:       row.ID,
+			Username: row.Username,
+			Email:    row.Email,
+			Created:  row.CreatedAt.Time,
 		}
 
 		uid := strconv.FormatInt(user.ID, 10)
@@ -280,11 +297,10 @@ func CreateUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 		}
 		token := hex.EncodeToString(raw)
 
-		_, err = db.Exec(
-			"INSERT INTO user_invitations (user_id, token, expires_at) VALUES ($1, $2, now() + interval '24 hours')",
-			user.ID, token,
-		)
-		if err != nil {
+		if err := q.InsertInvitation(c.Request.Context(), dbsqlc.InsertInvitationParams{
+			UserID: user.ID,
+			Token:  token,
+		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -301,7 +317,7 @@ func CreateUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	}
 }
 
-func VerifyInvitation(db *sql.DB) gin.HandlerFunc {
+func VerifyInvitation(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.VerifyInvitationRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -309,11 +325,8 @@ func VerifyInvitation(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var invID, userID int64
-		err := db.QueryRow(
-			"SELECT id, user_id FROM user_invitations WHERE token = $1 AND expires_at > now() AND used_at IS NULL",
-			req.Token,
-		).Scan(&invID, &userID)
+		q := dbsqlc.New(pool)
+		inv, err := q.GetValidInvitation(c.Request.Context(), req.Token)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid or expired token"})
 			return
@@ -330,30 +343,29 @@ func VerifyInvitation(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		tx, err := db.Begin()
+		ctx := c.Request.Context()
+		tx, err := pool.Begin(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer func() { _ = tx.Rollback() }()
+		defer tx.Rollback(ctx) //nolint:errcheck
 
-		if _, err = tx.Exec(
-			"UPDATE users SET password_hash = $1, verified_at = now() WHERE id = $2",
-			hash, userID,
-		); err != nil {
+		tq := dbsqlc.New(tx)
+		if err := tq.VerifyUser(ctx, dbsqlc.VerifyUserParams{
+			PasswordHash: hash,
+			ID:           inv.UserID,
+		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		if _, err = tx.Exec(
-			"UPDATE user_invitations SET used_at = now() WHERE id = $1",
-			invID,
-		); err != nil {
+		if err := tq.MarkInvitationUsed(ctx, inv.ID); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		if err := tx.Commit(); err != nil {
+		if err := tx.Commit(ctx); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -365,9 +377,9 @@ func VerifyInvitation(db *sql.DB) gin.HandlerFunc {
 // verifyCurrentPassword fetches the user's password hash and checks it against
 // the provided password. Returns false and writes the appropriate JSON error
 // response if the check fails, so the caller can return immediately.
-func verifyCurrentPassword(c *gin.Context, db *sql.DB, userID, password string) bool {
-	var passwordHash []byte
-	if err := db.QueryRow("SELECT password_hash FROM users WHERE id = $1", userID).Scan(&passwordHash); err != nil {
+func verifyCurrentPassword(c *gin.Context, q *dbsqlc.Queries, userIDInt int64, password string) bool {
+	passwordHash, err := q.GetUserPassword(context.Background(), userIDInt)
+	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return false
 	}
@@ -378,7 +390,7 @@ func verifyCurrentPassword(c *gin.Context, db *sql.DB, userID, password string) 
 	return true
 }
 
-func ChangePassword(db *sql.DB) gin.HandlerFunc {
+func ChangePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.ChangePasswordRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -387,8 +399,14 @@ func ChangePassword(db *sql.DB) gin.HandlerFunc {
 		}
 
 		userID := c.GetString("userID")
+		userIDInt, err := strconv.ParseInt(userID, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+			return
+		}
 
-		if !verifyCurrentPassword(c, db, userID, req.CurrentPassword) {
+		q := dbsqlc.New(pool)
+		if !verifyCurrentPassword(c, q, userIDInt, req.CurrentPassword) {
 			return
 		}
 
@@ -403,18 +421,15 @@ func ChangePassword(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, err = db.Exec(
-			"UPDATE users SET password_hash = $1 WHERE id = $2",
-			hash, userID,
-		); err != nil {
+		if err := q.UpdateUserPassword(c.Request.Context(), dbsqlc.UpdateUserPasswordParams{
+			PasswordHash: hash,
+			ID:           userIDInt,
+		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		if _, err = db.Exec(
-			"DELETE FROM sessions WHERE user_id = $1",
-			userID,
-		); err != nil {
+		if err := q.DeleteUserSessions(c.Request.Context(), userIDInt); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -423,7 +438,7 @@ func ChangePassword(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateUsername(db *sql.DB) gin.HandlerFunc {
+func UpdateUsername(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.UpdateUsernameRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -432,12 +447,21 @@ func UpdateUsername(db *sql.DB) gin.HandlerFunc {
 		}
 
 		userID := c.GetString("userID")
-
-		if !verifyCurrentPassword(c, db, userID, req.CurrentPassword) {
+		userIDInt, err := strconv.ParseInt(userID, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
 			return
 		}
 
-		if _, err := db.Exec("UPDATE users SET username = $1 WHERE id = $2", req.Username, userID); err != nil {
+		q := dbsqlc.New(pool)
+		if !verifyCurrentPassword(c, q, userIDInt, req.CurrentPassword) {
+			return
+		}
+
+		if err := q.UpdateUsername(c.Request.Context(), dbsqlc.UpdateUsernameParams{
+			Username: req.Username,
+			ID:       userIDInt,
+		}); err != nil {
 			if pqErr, ok := errors.AsType[*pgconn.PgError](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
 				c.JSON(http.StatusConflict, gin.H{"error": "username already taken"})
 				return
@@ -450,7 +474,7 @@ func UpdateUsername(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func UpdateEmail(db *sql.DB) gin.HandlerFunc {
+func UpdateEmail(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.UpdateEmailRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -459,12 +483,21 @@ func UpdateEmail(db *sql.DB) gin.HandlerFunc {
 		}
 
 		userID := c.GetString("userID")
-
-		if !verifyCurrentPassword(c, db, userID, req.CurrentPassword) {
+		userIDInt, err := strconv.ParseInt(userID, 10, 64)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
 			return
 		}
 
-		if _, err := db.Exec("UPDATE users SET email = $1 WHERE id = $2", req.Email, userID); err != nil {
+		q := dbsqlc.New(pool)
+		if !verifyCurrentPassword(c, q, userIDInt, req.CurrentPassword) {
+			return
+		}
+
+		if err := q.UpdateEmail(c.Request.Context(), dbsqlc.UpdateEmailParams{
+			Email: req.Email,
+			ID:    userIDInt,
+		}); err != nil {
 			if pqErr, ok := errors.AsType[*pgconn.PgError](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
 				c.JSON(http.StatusConflict, gin.H{"error": "email already taken"})
 				return
@@ -477,7 +510,7 @@ func UpdateEmail(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func DeleteUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+func DeleteUser(pool *pgxpool.Pool, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		targetID, err := strconv.ParseInt(c.Param("id"), 10, 64)
 		if err != nil {
@@ -496,12 +529,13 @@ func DeleteUser(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 		}
 
 		// FK CASCADE handles access_tokens, sessions, user_invitations
-		res, err := db.Exec("DELETE FROM users WHERE id = $1", targetID)
+		q := dbsqlc.New(pool)
+		result, err := q.DeleteUser(c.Request.Context(), targetID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		if n, _ := res.RowsAffected(); n == 0 {
+		if result.RowsAffected() == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
 		}
@@ -518,8 +552,6 @@ func GetUserPermissions(enforcer *casbin.Enforcer) gin.HandlerFunc {
 		var permissions []string
 
 		if tokenType == auth.TypeSession {
-			// Check each known permission via Enforce — handles wildcards (*.*,
-			// obj.*) and transitive roles correctly without parsing raw policies.
 			for _, perm := range perms.All {
 				parts := strings.SplitN(perm, ".", 2)
 				if len(parts) != 2 {
@@ -532,7 +564,6 @@ func GetUserPermissions(enforcer *casbin.Enforcer) gin.HandlerFunc {
 				}
 			}
 		} else {
-			// access token: scopes set by HandleAccessTokenAuth
 			permissions = c.GetStringSlice("tokenScopes")
 		}
 

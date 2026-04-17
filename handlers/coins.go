@@ -1,9 +1,9 @@
 package handlers
 
 import (
-	"database/sql"
 	"errors"
 	"ledger/auth"
+	dbsqlc "ledger/db/sqlc"
 	"ledger/mc"
 	"ledger/models"
 	"ledger/util"
@@ -11,69 +11,33 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // actorIDs extracts the Ledger user id and access token id (if applicable) from the gin context.
-func actorIDs(c *gin.Context) (*int64, *int64) {
+func actorIDs(c *gin.Context) (pgtype.Int8, pgtype.Int8) {
 	userIDStr := c.GetString("userID")
 	userID, err := strconv.ParseInt(userIDStr, 10, 64)
-	var actorUserID *int64
+	var actorUserID pgtype.Int8
 	if err == nil && userID > 0 {
-		actorUserID = &userID
+		actorUserID = pgtype.Int8{Int64: userID, Valid: true}
 	}
 
-	var actorTokenID *int64
+	var actorTokenID pgtype.Int8
 	if c.GetString("tokenType") == auth.TypeAccessToken {
 		tokenIDStr := c.GetString("tokenID")
 		tokenID, err := strconv.ParseInt(tokenIDStr, 10, 64)
 		if err == nil && tokenID > 0 {
-			actorTokenID = &tokenID
+			actorTokenID = pgtype.Int8{Int64: tokenID, Valid: true}
 		}
 	}
 
 	return actorUserID, actorTokenID
 }
 
-// insertTransaction records a coin transaction row inside an open transaction.
-func insertTransaction(tx *sql.Tx, playerID, amount int64, source string, description *string, actorUserID, actorTokenID *int64) error {
-	_, err := tx.Exec(
-		`INSERT INTO coin_transactions (player_id, amount, source, description, actor_user_id, actor_token_id)
-		 VALUES ($1, $2, $3, $4, $5, $6)`,
-		playerID, amount, source, description, actorUserID, actorTokenID,
-	)
-	return err
-}
-
-// lockedBalance reads the current balance for a player with a FOR UPDATE lock.
-// Returns 0 (not an error) when no balance row exists yet.
-func lockedBalance(tx *sql.Tx, playerID int64) (int64, error) {
-	var balance int64
-	err := tx.QueryRow(
-		"SELECT balance FROM coin_balances WHERE player_id = $1 FOR UPDATE",
-		playerID,
-	).Scan(&balance)
-	if errors.Is(err, sql.ErrNoRows) {
-		return 0, nil
-	}
-	return balance, err
-}
-
-// applyBalanceDelta upserts the coin_balances row, adding delta to the current balance.
-// delta may be positive or negative.
-func applyBalanceDelta(tx *sql.Tx, playerID, delta int64) (int64, error) {
-	var newBalance int64
-	err := tx.QueryRow(
-		`INSERT INTO coin_balances (player_id, balance, updated_at)
-		 VALUES ($1, $2, now())
-		 ON CONFLICT (player_id) DO UPDATE
-		   SET balance = coin_balances.balance + $2, updated_at = now()
-		 RETURNING balance`,
-		playerID, delta,
-	).Scan(&newBalance)
-	return newBalance, err
-}
-
-func AwardCoins(db *sql.DB) gin.HandlerFunc {
+func AwardCoins(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.Param("uuid")
 		if !util.ValidateUUID(c, uid) {
@@ -87,32 +51,45 @@ func AwardCoins(db *sql.DB) gin.HandlerFunc {
 		}
 
 		actorUserID, actorTokenID := actorIDs(c)
+		desc := pgtextPtr(req.Description)
+		ctx := c.Request.Context()
 
-		tx, err := db.Begin()
+		tx, err := pool.Begin(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer func() { _ = tx.Rollback() }()
+		defer tx.Rollback(ctx) //nolint:errcheck
 
-		playerID, err := mc.UpsertPlayer(db, tx, uid)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-
-		if err := insertTransaction(tx, playerID, req.Amount, req.Source, req.Description, actorUserID, actorTokenID); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
-		}
-
-		newBalance, err := applyBalanceDelta(tx, playerID, req.Amount)
+		q := dbsqlc.New(tx)
+		playerID, err := mc.UpsertPlayer(pool, q, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		if err := tx.Commit(); err != nil {
+		if err := q.InsertCoinTransaction(ctx, dbsqlc.InsertCoinTransactionParams{
+			PlayerID:     playerID,
+			Amount:       req.Amount,
+			Source:       dbsqlc.CoinSource(req.Source),
+			Description:  desc,
+			ActorUserID:  actorUserID,
+			ActorTokenID: actorTokenID,
+		}); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		newBalance, err := q.UpsertBalance(ctx, dbsqlc.UpsertBalanceParams{
+			PlayerID: playerID,
+			Balance:  req.Amount,
+		})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
+
+		if err := tx.Commit(ctx); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -121,7 +98,7 @@ func AwardCoins(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func SpendCoins(db *sql.DB) gin.HandlerFunc {
+func SpendCoins(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.Param("uuid")
 		if !util.ValidateUUID(c, uid) {
@@ -135,8 +112,10 @@ func SpendCoins(db *sql.DB) gin.HandlerFunc {
 		}
 
 		actorUserID, actorTokenID := actorIDs(c)
+		desc := pgtextPtr(req.Description)
+		ctx := c.Request.Context()
 
-		playerID, err := mc.GetPlayerID(db, uid)
+		playerID, err := mc.GetPlayerID(pool, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -146,15 +125,18 @@ func SpendCoins(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		tx, err := db.Begin()
+		tx, err := pool.Begin(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer func() { _ = tx.Rollback() }()
+		defer tx.Rollback(ctx) //nolint:errcheck
 
-		current, err := lockedBalance(tx, playerID)
-		if err != nil {
+		q := dbsqlc.New(tx)
+		current, err := q.GetLockedBalance(ctx, playerID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			current = 0
+		} else if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -163,18 +145,28 @@ func SpendCoins(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := insertTransaction(tx, playerID, -req.Amount, req.Source, req.Description, actorUserID, actorTokenID); err != nil {
+		if err := q.InsertCoinTransaction(ctx, dbsqlc.InsertCoinTransactionParams{
+			PlayerID:     playerID,
+			Amount:       -req.Amount,
+			Source:       dbsqlc.CoinSource(req.Source),
+			Description:  desc,
+			ActorUserID:  actorUserID,
+			ActorTokenID: actorTokenID,
+		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		newBalance, err := applyBalanceDelta(tx, playerID, -req.Amount)
+		newBalance, err := q.UpsertBalance(ctx, dbsqlc.UpsertBalanceParams{
+			PlayerID: playerID,
+			Balance:  -req.Amount,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		if err := tx.Commit(); err != nil {
+		if err := tx.Commit(ctx); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -183,7 +175,7 @@ func SpendCoins(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func AdjustCoins(db *sql.DB) gin.HandlerFunc {
+func AdjustCoins(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.Param("uuid")
 		if !util.ValidateUUID(c, uid) {
@@ -197,22 +189,27 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 		}
 
 		actorUserID, actorTokenID := actorIDs(c)
+		desc := pgtextPtr(req.Description)
+		ctx := c.Request.Context()
 
-		tx, err := db.Begin()
+		tx, err := pool.Begin(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer func() { _ = tx.Rollback() }()
+		defer tx.Rollback(ctx) //nolint:errcheck
 
-		playerID, err := mc.UpsertPlayer(db, tx, uid)
+		q := dbsqlc.New(tx)
+		playerID, err := mc.UpsertPlayer(pool, q, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		current, err := lockedBalance(tx, playerID)
-		if err != nil {
+		current, err := q.GetLockedBalance(ctx, playerID)
+		if errors.Is(err, pgx.ErrNoRows) {
+			current = 0
+		} else if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -221,18 +218,28 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if err := insertTransaction(tx, playerID, req.Amount, req.Source, req.Description, actorUserID, actorTokenID); err != nil {
+		if err := q.InsertCoinTransaction(ctx, dbsqlc.InsertCoinTransactionParams{
+			PlayerID:     playerID,
+			Amount:       req.Amount,
+			Source:       dbsqlc.CoinSource(req.Source),
+			Description:  desc,
+			ActorUserID:  actorUserID,
+			ActorTokenID: actorTokenID,
+		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		newBalance, err := applyBalanceDelta(tx, playerID, req.Amount)
+		newBalance, err := q.UpsertBalance(ctx, dbsqlc.UpsertBalanceParams{
+			PlayerID: playerID,
+			Balance:  req.Amount,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		if err := tx.Commit(); err != nil {
+		if err := tx.Commit(ctx); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -241,21 +248,16 @@ func AdjustCoins(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func GetPlayerCoins(db *sql.DB) gin.HandlerFunc {
+func GetPlayerCoins(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.Param("uuid")
 		if !util.ValidateUUID(c, uid) {
 			return
 		}
 
-		var balance int64
-		err := db.QueryRow(
-			`SELECT cb.balance FROM coin_balances cb
-			 JOIN minecraft_players mp ON mp.id = cb.player_id
-			 WHERE mp.uuid = $1`,
-			uid,
-		).Scan(&balance)
-		if err == sql.ErrNoRows {
+		q := dbsqlc.New(pool)
+		balance, err := q.GetPlayerBalance(c.Request.Context(), uid)
+		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
 			return
 		}
@@ -268,7 +270,7 @@ func GetPlayerCoins(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
+func GetPlayerTransactions(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.Param("uuid")
 		if !util.ValidateUUID(c, uid) {
@@ -276,7 +278,7 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 		}
 		limit, offset := util.ParsePagination(c)
 
-		playerID, err := mc.GetPlayerID(db, uid)
+		playerID, err := mc.GetPlayerID(pool, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -286,35 +288,49 @@ func GetPlayerTransactions(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		rows, err := db.Query(
-			`SELECT id, player_id, amount, source, description, created_at, actor_user_id, actor_token_id
-			 FROM coin_transactions WHERE player_id = $1
-			 ORDER BY created_at DESC LIMIT $2 OFFSET $3`,
-			playerID, limit, offset,
-		)
+		q := dbsqlc.New(pool)
+		rows, err := q.ListPlayerTransactions(c.Request.Context(), dbsqlc.ListPlayerTransactionsParams{
+			PlayerID: playerID,
+			Limit:    int32(limit),
+			Offset:   int32(offset),
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer func() { _ = rows.Close() }()
 
-		transactions := make([]models.CoinTransaction, 0)
-		for rows.Next() {
-			var t models.CoinTransaction
-			if err := rows.Scan(
-				&t.ID, &t.PlayerID, &t.Amount, &t.Source, &t.Description,
-				&t.CreatedAt, &t.ActorUserID, &t.ActorTokenID,
-			); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-				return
+		transactions := make([]models.CoinTransaction, 0, len(rows))
+		for _, r := range rows {
+			t := models.CoinTransaction{
+				ID:        r.ID,
+				PlayerID:  r.PlayerID,
+				Amount:    r.Amount,
+				Source:    string(r.Source),
+				CreatedAt: r.CreatedAt.Time,
+			}
+			if r.Description.Valid {
+				s := r.Description.String
+				t.Description = &s
+			}
+			if r.ActorUserID.Valid {
+				n := r.ActorUserID.Int64
+				t.ActorUserID = &n
+			}
+			if r.ActorTokenID.Valid {
+				n := r.ActorTokenID.Int64
+				t.ActorTokenID = &n
 			}
 			transactions = append(transactions, t)
-		}
-		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
 		}
 
 		c.JSON(http.StatusOK, transactions)
 	}
+}
+
+// pgtextPtr converts a *string to pgtype.Text.
+func pgtextPtr(s *string) pgtype.Text {
+	if s == nil {
+		return pgtype.Text{}
+	}
+	return pgtype.Text{String: *s, Valid: true}
 }

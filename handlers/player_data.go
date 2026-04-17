@@ -1,17 +1,19 @@
 package handlers
 
 import (
-	"database/sql"
 	"encoding/json"
 	"errors"
 	"io"
 	"net/http"
 	"strings"
 
+	dbsqlc "ledger/db/sqlc"
 	"ledger/mc"
 	"ledger/util"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // splitPath converts "game/soccer/foo" → ["game","soccer","foo"].
@@ -24,17 +26,7 @@ func splitPath(raw string) []string {
 	return strings.Split(raw, "/")
 }
 
-// pgTextArray formats a string slice as a Postgres text[] literal, e.g. {"game","soccer"}.
-func pgTextArray(parts []string) string {
-	escaped := make([]string, len(parts))
-	r := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
-	for i, p := range parts {
-		escaped[i] = `"` + r.Replace(p) + `"`
-	}
-	return "{" + strings.Join(escaped, ",") + "}"
-}
-
-func GetPlayerData(db *sql.DB) gin.HandlerFunc {
+func GetPlayerData(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.Param("uuid")
 		if !util.ValidateUUID(c, uid) {
@@ -44,22 +36,28 @@ func GetPlayerData(db *sql.DB) gin.HandlerFunc {
 		rawPath := strings.TrimPrefix(c.Param("path"), "/")
 		parts := splitPath(rawPath)
 
-		var raw []byte
-		var err error
+		q := dbsqlc.New(pool)
+		ctx := c.Request.Context()
 
 		if len(parts) == 0 {
-			err = db.QueryRow(
-				`SELECT data FROM minecraft_players WHERE uuid = $1`,
-				uid,
-			).Scan(&raw)
-		} else {
-			err = db.QueryRow(
-				`SELECT data #> $1::text[] FROM minecraft_players WHERE uuid = $2`,
-				pgTextArray(parts), uid,
-			).Scan(&raw)
+			raw, err := q.GetPlayerData(ctx, uid)
+			if errors.Is(err, pgx.ErrNoRows) {
+				c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
+				return
+			}
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+				return
+			}
+			c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
+			return
 		}
 
-		if errors.Is(err, sql.ErrNoRows) {
+		result, err := q.GetPlayerDataAtPath(ctx, dbsqlc.GetPlayerDataAtPathParams{
+			Column1: parts,
+			Uuid:    uid,
+		})
+		if errors.Is(err, pgx.ErrNoRows) {
 			c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
 			return
 		}
@@ -67,16 +65,20 @@ func GetPlayerData(db *sql.DB) gin.HandlerFunc {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		if raw == nil {
+		if result == nil {
 			c.JSON(http.StatusNotFound, gin.H{"error": "path not found"})
 			return
 		}
-
+		raw, err := json.Marshal(result)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			return
+		}
 		c.Data(http.StatusOK, "application/json; charset=utf-8", raw)
 	}
 }
 
-func SetPlayerData(db *sql.DB) gin.HandlerFunc {
+func SetPlayerData(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.Param("uuid")
 		if !util.ValidateUUID(c, uid) {
@@ -106,23 +108,22 @@ func SetPlayerData(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		tx, err := db.Begin()
+		ctx := c.Request.Context()
+		tx, err := pool.Begin(ctx)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer func() { _ = tx.Rollback() }()
+		defer tx.Rollback(ctx) //nolint:errcheck
 
-		playerID, err := mc.UpsertPlayer(db, tx, uid)
+		q := dbsqlc.New(tx)
+		playerID, err := mc.UpsertPlayer(pool, q, uid)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		var rawData []byte
-		err = tx.QueryRow(
-			`SELECT data FROM minecraft_players WHERE id = $1`, playerID,
-		).Scan(&rawData)
+		rawData, err := q.GetPlayerDataForUpdate(ctx, playerID)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -155,15 +156,15 @@ func SetPlayerData(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if _, err = tx.Exec(
-			`UPDATE minecraft_players SET data = $1::jsonb WHERE id = $2`,
-			string(newData), playerID,
-		); err != nil {
+		if err := q.UpdatePlayerData(ctx, dbsqlc.UpdatePlayerDataParams{
+			Column1: newData,
+			ID:      playerID,
+		}); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
 
-		if err := tx.Commit(); err != nil {
+		if err := tx.Commit(ctx); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -172,7 +173,7 @@ func SetPlayerData(db *sql.DB) gin.HandlerFunc {
 	}
 }
 
-func DeletePlayerData(db *sql.DB) gin.HandlerFunc {
+func DeletePlayerData(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		uid := c.Param("uuid")
 		if !util.ValidateUUID(c, uid) {
@@ -186,18 +187,16 @@ func DeletePlayerData(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		result, err := db.Exec(
-			`UPDATE minecraft_players
-			 SET data = data #- $1::text[]
-			 WHERE uuid = $2`,
-			pgTextArray(parts), uid,
-		)
+		q := dbsqlc.New(pool)
+		result, err := q.DeletePlayerDataAtPath(c.Request.Context(), dbsqlc.DeletePlayerDataAtPathParams{
+			Column1: parts,
+			Uuid:    uid,
+		})
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		rows, _ := result.RowsAffected()
-		if rows == 0 {
+		if result.RowsAffected() == 0 {
 			c.JSON(http.StatusNotFound, gin.H{"error": "player not found"})
 			return
 		}

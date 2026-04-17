@@ -7,6 +7,9 @@ package sqlc
 
 import (
 	"context"
+
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgtype"
 )
 
 const addUser = `-- name: AddUser :one
@@ -26,4 +29,170 @@ func (q *Queries) AddUser(ctx context.Context, arg AddUserParams) (int64, error)
 	var id int64
 	err := row.Scan(&id)
 	return id, err
+}
+
+const createShellUser = `-- name: CreateShellUser :one
+INSERT INTO users (username, email) VALUES ($1, $2)
+RETURNING id, username, email, created_at
+`
+
+type CreateShellUserParams struct {
+	Username string
+	Email    string
+}
+
+type CreateShellUserRow struct {
+	ID        int64
+	Username  string
+	Email     string
+	CreatedAt pgtype.Timestamp
+}
+
+func (q *Queries) CreateShellUser(ctx context.Context, arg CreateShellUserParams) (CreateShellUserRow, error) {
+	row := q.db.QueryRow(ctx, createShellUser, arg.Username, arg.Email)
+	var i CreateShellUserRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const deleteUser = `-- name: DeleteUser :execresult
+DELETE FROM users WHERE id = $1
+`
+
+func (q *Queries) DeleteUser(ctx context.Context, id int64) (pgconn.CommandTag, error) {
+	return q.db.Exec(ctx, deleteUser, id)
+}
+
+const getUserByID = `-- name: GetUserByID :one
+SELECT id, username, email, created_at FROM users WHERE id = $1
+`
+
+type GetUserByIDRow struct {
+	ID        int64
+	Username  string
+	Email     string
+	CreatedAt pgtype.Timestamp
+}
+
+func (q *Queries) GetUserByID(ctx context.Context, id int64) (GetUserByIDRow, error) {
+	row := q.db.QueryRow(ctx, getUserByID, id)
+	var i GetUserByIDRow
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.Email,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const getUserByIdentifier = `-- name: GetUserByIdentifier :one
+SELECT id, password_hash FROM users
+WHERE (username = $1 OR email = $1) AND verified_at IS NOT NULL
+`
+
+type GetUserByIdentifierRow struct {
+	ID           int64
+	PasswordHash []byte
+}
+
+func (q *Queries) GetUserByIdentifier(ctx context.Context, username string) (GetUserByIdentifierRow, error) {
+	row := q.db.QueryRow(ctx, getUserByIdentifier, username)
+	var i GetUserByIdentifierRow
+	err := row.Scan(&i.ID, &i.PasswordHash)
+	return i, err
+}
+
+const getUserPassword = `-- name: GetUserPassword :one
+SELECT password_hash FROM users WHERE id = $1
+`
+
+func (q *Queries) GetUserPassword(ctx context.Context, id int64) ([]byte, error) {
+	row := q.db.QueryRow(ctx, getUserPassword, id)
+	var password_hash []byte
+	err := row.Scan(&password_hash)
+	return password_hash, err
+}
+
+const listUsers = `-- name: ListUsers :many
+SELECT id, username, email, created_at FROM users ORDER BY created_at DESC
+`
+
+type ListUsersRow struct {
+	ID        int64
+	Username  string
+	Email     string
+	CreatedAt pgtype.Timestamp
+}
+
+func (q *Queries) ListUsers(ctx context.Context) ([]ListUsersRow, error) {
+	rows, err := q.db.Query(ctx, listUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListUsersRow
+	for rows.Next() {
+		var i ListUsersRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.Username,
+			&i.Email,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const updateEmail = `-- name: UpdateEmail :exec
+UPDATE users SET email = $1 WHERE id = $2
+`
+
+type UpdateEmailParams struct {
+	Email string
+	ID    int64
+}
+
+func (q *Queries) UpdateEmail(ctx context.Context, arg UpdateEmailParams) error {
+	_, err := q.db.Exec(ctx, updateEmail, arg.Email, arg.ID)
+	return err
+}
+
+const updateUserPassword = `-- name: UpdateUserPassword :exec
+UPDATE users SET password_hash = $1 WHERE id = $2
+`
+
+type UpdateUserPasswordParams struct {
+	PasswordHash []byte
+	ID           int64
+}
+
+func (q *Queries) UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error {
+	_, err := q.db.Exec(ctx, updateUserPassword, arg.PasswordHash, arg.ID)
+	return err
+}
+
+const updateUsername = `-- name: UpdateUsername :exec
+UPDATE users SET username = $1 WHERE id = $2
+`
+
+type UpdateUsernameParams struct {
+	Username string
+	ID       int64
+}
+
+func (q *Queries) UpdateUsername(ctx context.Context, arg UpdateUsernameParams) error {
+	_, err := q.db.Exec(ctx, updateUsername, arg.Username, arg.ID)
+	return err
 }

@@ -84,7 +84,7 @@ type CoinTransaction struct {
 
 type MinecraftPlayer struct {
 	ID                int64
-	Uuid              pgtype.UUID
+	Uuid              string
 	CreatedAt         pgtype.Timestamp
 	Username          pgtype.Text
 	UsernameFetchedAt pgtype.Timestamp

@@ -1,14 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"ledger/db"
+	dbsqlc "ledger/db/sqlc"
 	"ledger/perms"
 	"log"
 	"os"
 	"strings"
-
-	"github.com/jackc/pgx/v5/stdlib"
 )
 
 func RunRoles(args []string) {
@@ -30,15 +30,12 @@ func runInitRoles() {
 	dsn := os.Getenv("DATABASE_URL")
 	pool := db.InitDB(dsn)
 	defer pool.Close()
-	database := stdlib.OpenDBFromPool(pool)
+	q := dbsqlc.New(pool)
 
 	enforcer := db.InitCasbin(dsn)
 
 	for _, role := range []string{"default", "admin"} {
-		_, err := database.Exec(
-			"INSERT INTO roles (name, protected) VALUES ($1, TRUE) ON CONFLICT DO NOTHING", role,
-		)
-		if err != nil {
+		if err := q.InitRole(context.Background(), role); err != nil {
 			log.Fatalf("Failed to create %s role: %v", role, err)
 		}
 	}

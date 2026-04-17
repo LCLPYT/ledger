@@ -1,13 +1,16 @@
 package auth
 
 import (
-	"database/sql"
+	"context"
 	"encoding/json"
+	dbsqlc "ledger/db/sqlc"
 	"os"
 	"strconv"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 const SessionLifetime = 1 * time.Hour
@@ -29,14 +32,19 @@ type Claims struct {
 // GenerateSessionToken generates a session token intended for graphical frontends.
 // Session tokens implicitly grant all permissions that the user has.
 // Session tokens are stored in the database and can be revoked.
-func GenerateSessionToken(userID string, db *sql.DB) (string, error) {
+func GenerateSessionToken(userID string, pool *pgxpool.Pool) (string, error) {
 	expiry := time.Now().Add(SessionLifetime)
 
-	var sessionID int64
-	err := db.QueryRow(
-		"INSERT INTO sessions (user_id, expires_at) VALUES ($1, $2) RETURNING id",
-		userID, expiry,
-	).Scan(&sessionID)
+	userIDInt, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return "", err
+	}
+
+	q := dbsqlc.New(pool)
+	sessionID, err := q.InsertSession(context.Background(), dbsqlc.InsertSessionParams{
+		UserID:    userIDInt,
+		ExpiresAt: pgtype.Timestamp{Time: expiry, Valid: true},
+	})
 	if err != nil {
 		return "", err
 	}
@@ -52,7 +60,6 @@ func GenerateSessionToken(userID string, db *sql.DB) (string, error) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
 	return token.SignedString(JwtKey)
 }
 
@@ -71,19 +78,24 @@ func GenerateSessionTokenFromID(userID string, sessionID string, expiry time.Tim
 	return token.SignedString(JwtKey)
 }
 
-func GenerateToken(userID string, scopes []string, expiry time.Time, db *sql.DB, name string) (string, error) {
+func GenerateToken(userID string, scopes []string, expiry time.Time, pool *pgxpool.Pool, name string) (string, error) {
 	scopesJson, err := json.Marshal(scopes)
 	if err != nil {
 		return "", err
 	}
 
-	var tokenId int64
+	userIDInt, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return "", err
+	}
 
-	err = db.QueryRow(
-		"INSERT INTO access_tokens (user_id, name, expires_at, scopes) VALUES ($1, $2, $3, $4) RETURNING id",
-		userID, name, expiry, scopesJson,
-	).Scan(&tokenId)
-
+	q := dbsqlc.New(pool)
+	tokenId, err := q.InsertToken(context.Background(), dbsqlc.InsertTokenParams{
+		UserID:    userIDInt,
+		Name:      name,
+		ExpiresAt: pgtype.Timestamp{Time: expiry, Valid: true},
+		Scopes:    scopesJson,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -98,6 +110,5 @@ func GenerateToken(userID string, scopes []string, expiry time.Time, db *sql.DB,
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-
 	return token.SignedString(JwtKey)
 }

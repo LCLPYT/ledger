@@ -1,8 +1,8 @@
 package handlers
 
 import (
-	"database/sql"
 	"errors"
+	dbsqlc "ledger/db/sqlc"
 	"ledger/models"
 	"net/http"
 	"strings"
@@ -10,25 +10,22 @@ import (
 	"github.com/casbin/casbin/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/jackc/pgerrcode"
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func ListRoles(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+func ListRoles(pool *pgxpool.Pool, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		rows, err := db.Query("SELECT id, name, created_at, protected FROM roles ORDER BY name")
+		q := dbsqlc.New(pool)
+		rows, err := q.ListRoles(c.Request.Context())
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
-		defer func() { _ = rows.Close() }()
 
-		result := make([]models.RoleWithMembers, 0)
-		for rows.Next() {
-			var r models.RoleWithMembers
-			if err := rows.Scan(&r.ID, &r.Name, &r.CreatedAt, &r.Protected); err != nil {
-				c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-				return
-			}
+		result := make([]models.RoleWithMembers, 0, len(rows))
+		for _, r := range rows {
 			members, err := enforcer.GetUsersForRole(r.Name)
 			if err != nil {
 				c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to fetch role members"})
@@ -37,19 +34,22 @@ func ListRoles(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 			if members == nil {
 				members = []string{}
 			}
-			r.Members = members
-			result = append(result, r)
-		}
-		if err := rows.Err(); err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
-			return
+			result = append(result, models.RoleWithMembers{
+				Role: models.Role{
+					ID:        r.ID,
+					Name:      r.Name,
+					CreatedAt: r.CreatedAt.Time,
+					Protected: r.Protected,
+				},
+				Members: members,
+			})
 		}
 
 		c.JSON(http.StatusOK, result)
 	}
 }
 
-func CreateRole(db *sql.DB) gin.HandlerFunc {
+func CreateRole(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req models.CreateRoleRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -57,11 +57,8 @@ func CreateRole(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		var role models.Role
-		err := db.QueryRow(
-			"INSERT INTO roles (name) VALUES ($1) RETURNING id, name, created_at, protected",
-			req.Name,
-		).Scan(&role.ID, &role.Name, &role.CreatedAt, &role.Protected)
+		q := dbsqlc.New(pool)
+		r, err := q.CreateRole(c.Request.Context(), req.Name)
 		if err != nil {
 			if pqErr, ok := errors.AsType[*pgconn.PgError](err); ok && pqErr.Code == pgerrcode.UniqueViolation {
 				c.JSON(http.StatusConflict, gin.H{"error": "role already exists"})
@@ -71,18 +68,23 @@ func CreateRole(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusCreated, role)
+		c.JSON(http.StatusCreated, models.Role{
+			ID:        r.ID,
+			Name:      r.Name,
+			CreatedAt: r.CreatedAt.Time,
+			Protected: r.Protected,
+		})
 	}
 }
 
-func DeleteRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+func DeleteRole(pool *pgxpool.Pool, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleName := c.Param("role")
 
-		var protected bool
-		err := db.QueryRow("SELECT protected FROM roles WHERE name = $1", roleName).Scan(&protected)
+		q := dbsqlc.New(pool)
+		protected, err := q.GetRoleProtected(c.Request.Context(), roleName)
 		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
+			if errors.Is(err, pgx.ErrNoRows) {
 				c.JSON(http.StatusNotFound, gin.H{"error": "role not found"})
 				return
 			}
@@ -109,7 +111,7 @@ func DeleteRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 			return
 		}
 
-		if _, err := db.Exec("DELETE FROM roles WHERE name = $1", roleName); err != nil {
+		if err := q.DeleteRole(c.Request.Context(), roleName); err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
 		}
@@ -212,7 +214,7 @@ func RemoveRolePermission(enforcer *casbin.Enforcer) gin.HandlerFunc {
 	}
 }
 
-func AddUserToRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+func AddUserToRole(pool *pgxpool.Pool, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleName := c.Param("role")
 
@@ -222,8 +224,8 @@ func AddUserToRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 			return
 		}
 
-		var exists bool
-		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM roles WHERE name = $1)", roleName).Scan(&exists)
+		q := dbsqlc.New(pool)
+		exists, err := q.RoleExists(c.Request.Context(), roleName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return
@@ -247,7 +249,7 @@ func AddUserToRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	}
 }
 
-func RemoveUserFromRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
+func RemoveUserFromRole(pool *pgxpool.Pool, enforcer *casbin.Enforcer) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		roleName := c.Param("role")
 
@@ -262,8 +264,8 @@ func RemoveUserFromRole(db *sql.DB, enforcer *casbin.Enforcer) gin.HandlerFunc {
 			return
 		}
 
-		var exists bool
-		err := db.QueryRow("SELECT EXISTS(SELECT 1 FROM roles WHERE name = $1)", roleName).Scan(&exists)
+		q := dbsqlc.New(pool)
+		exists, err := q.RoleExists(c.Request.Context(), roleName)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 			return

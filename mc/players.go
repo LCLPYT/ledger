@@ -1,11 +1,15 @@
 package mc
 
 import (
-	"database/sql"
-	"errors"
+	"context"
+	dbsqlc "ledger/db/sqlc"
 	"ledger/models"
 	"ledger/mojang"
 	"time"
+
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // FetchUsername is the function used to resolve a Minecraft UUID to a username.
@@ -20,91 +24,98 @@ const UsernameStaleDuration = 7 * 24 * time.Hour
 
 // UpsertPlayer inserts a minecraft_players row if it doesn't exist and returns the player's DB id.
 // A background goroutine fetches and caches the Minecraft username whenever the cache is missing
-// or older than usernameStaleDuration.
-// db is used only for that background fetch; tx is used for the insert/select.
-func UpsertPlayer(db *sql.DB, tx *sql.Tx, uuid string) (int64, error) {
-	var id int64
-	err := tx.QueryRow(
-		`INSERT INTO minecraft_players (uuid) 
-			VALUES ($1) ON CONFLICT (uuid) DO NOTHING 
-			RETURNING id`,
-		uuid,
-	).Scan(&id)
-	if errors.Is(err, sql.ErrNoRows) {
+// or older than UsernameStaleDuration.
+// pool is used only for background username fetching; q must be a tx-backed or pool-backed Queries.
+func UpsertPlayer(pool *pgxpool.Pool, q *dbsqlc.Queries, uuid string) (int64, error) {
+	ctx := context.Background()
+
+	id, err := q.InsertPlayerByUUID(ctx, uuid)
+	if err != nil && err == pgx.ErrNoRows {
 		// Player already existed — fetch id and username cache timestamp.
-		var fetchedAt *time.Time
-		err = tx.QueryRow(
-			`SELECT id, username_fetched_at FROM minecraft_players WHERE uuid = $1`,
-			uuid,
-		).Scan(&id, &fetchedAt)
+		row, err := q.GetPlayerIDAndFetchTime(ctx, uuid)
 		if err != nil {
 			return 0, err
 		}
-		if fetchedAt == nil || time.Since(*fetchedAt) > UsernameStaleDuration {
-			go RefreshUsernameCache(db, id, uuid)
+		if !row.UsernameFetchedAt.Valid || time.Since(row.UsernameFetchedAt.Time) > UsernameStaleDuration {
+			go RefreshUsernameCache(pool, row.ID, uuid)
 		}
-		return id, nil
+		return row.ID, nil
 	}
 	if err != nil {
 		return 0, err
 	}
 	// New player: fetch username in background after the transaction commits.
-	// The Mojang API call takes long enough (network) that the commit will have happened.
-	go RefreshUsernameCache(db, id, uuid)
+	go RefreshUsernameCache(pool, id, uuid)
 	return id, nil
 }
 
 // GetPlayerID returns the DB id for a minecraft UUID, or 0 if not found.
-func GetPlayerID(db *sql.DB, uuid string) (int64, error) {
-	player, _, err := QueryPlayer(db, uuid)
-	if errors.Is(err, sql.ErrNoRows) {
+func GetPlayerID(pool *pgxpool.Pool, uuid string) (int64, error) {
+	q := dbsqlc.New(pool)
+	row, err := q.GetPlayerByUUID(context.Background(), uuid)
+	if err == pgx.ErrNoRows {
 		return 0, nil
 	}
-
-	return player.ID, err
+	return row.ID, err
 }
 
 // RefreshUsernameCache fetches the current username from Mojang and updates the DB row.
 // Intended to be called in a goroutine.
-func RefreshUsernameCache(db *sql.DB, playerID int64, uuid string) {
+func RefreshUsernameCache(pool *pgxpool.Pool, playerID int64, uuid string) {
 	name, err := FetchUsername(uuid)
 	if err != nil {
 		return
 	}
-	_, _ = db.Exec(
-		`UPDATE minecraft_players 
-			SET username = NULLIF($1, ''), username_fetched_at = now() 
-			WHERE id = $2`,
-		name, playerID,
-	)
+	q := dbsqlc.New(pool)
+	_ = q.UpdatePlayerUsername(context.Background(), dbsqlc.UpdatePlayerUsernameParams{
+		Column1: name,
+		ID:      playerID,
+	})
 }
 
 // QueryPlayer fetches a player row by UUID.
-// Returns sql.ErrNoRows if the player doesn't exist.
-func QueryPlayer(db *sql.DB, uid string) (models.MinecraftPlayer, *time.Time, error) {
-	var p models.MinecraftPlayer
+// Returns pgx.ErrNoRows if the player doesn't exist.
+func QueryPlayer(pool *pgxpool.Pool, uid string) (models.MinecraftPlayer, *time.Time, error) {
+	q := dbsqlc.New(pool)
+	row, err := q.GetPlayerByUUID(context.Background(), uid)
+	if err != nil {
+		return models.MinecraftPlayer{}, nil, err
+	}
+
+	p := rowToPlayer(row)
+
 	var fetchedAt *time.Time
-	err := db.QueryRow(
-		`SELECT id, uuid, username, created_at, username_fetched_at
-		 FROM minecraft_players WHERE uuid = $1`,
-		uid,
-	).Scan(&p.ID, &p.UUID, &p.Username, &p.CreatedAt, &fetchedAt)
-	return p, fetchedAt, err
+	if row.UsernameFetchedAt.Valid {
+		t := row.UsernameFetchedAt.Time
+		fetchedAt = &t
+	}
+	return p, fetchedAt, nil
 }
 
 // UpsertPlayerWithUsername inserts or updates a player row with a known username and
 // returns the full player record. Used when the username is already fetched from Mojang.
-func UpsertPlayerWithUsername(db *sql.DB, uuid, username string) (models.MinecraftPlayer, error) {
-	_, err := db.Exec(
-		`INSERT INTO minecraft_players (uuid, username, username_fetched_at)
-		 VALUES ($1, $2, now())
-		 ON CONFLICT (uuid) DO UPDATE
-		   SET username = EXCLUDED.username, username_fetched_at = now()`,
-		uuid, username,
-	)
+func UpsertPlayerWithUsername(pool *pgxpool.Pool, uuid, username string) (models.MinecraftPlayer, error) {
+	q := dbsqlc.New(pool)
+	err := q.UpsertPlayerWithUsername(context.Background(), dbsqlc.UpsertPlayerWithUsernameParams{
+		Uuid:     uuid,
+		Username: pgtype.Text{String: username, Valid: true},
+	})
 	if err != nil {
 		return models.MinecraftPlayer{}, err
 	}
-	p, _, err := QueryPlayer(db, uuid)
+	p, _, err := QueryPlayer(pool, uuid)
 	return p, err
+}
+
+func rowToPlayer(row dbsqlc.GetPlayerByUUIDRow) models.MinecraftPlayer {
+	p := models.MinecraftPlayer{
+		ID:        row.ID,
+		UUID:      row.Uuid,
+		CreatedAt: row.CreatedAt.Time,
+	}
+	if row.Username.Valid {
+		s := row.Username.String
+		p.Username = &s
+	}
+	return p
 }

@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/jackc/pgx/v5/stdlib"
 )
 
 func main() {
@@ -41,12 +40,11 @@ func runServe() {
 	dsn := os.Getenv("DATABASE_URL")
 	pool := db.InitDB(dsn)
 	defer pool.Close()
-	sqlDB := stdlib.OpenDBFromPool(pool)
 
 	enforcer := db.InitCasbin(dsn)
 	r := gin.Default()
 
-	routes.SetupRoutes(r, enforcer, sqlDB)
+	routes.SetupRoutes(r, enforcer, pool)
 
 	if err := r.Run(); err != nil {
 		os.Exit(1)

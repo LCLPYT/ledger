@@ -1,18 +1,21 @@
 package middleware
 
 import (
-	"database/sql"
+	"context"
 	"encoding/json"
 	"ledger/auth"
+	dbsqlc "ledger/db/sqlc"
 	"net/http"
+	"strconv"
 	"strings"
 
 	"github.com/casbin/casbin/v3"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func AuthRequired(enforcer *casbin.Enforcer, db *sql.DB, requiredPermissions ...string) gin.HandlerFunc {
+func AuthRequired(enforcer *casbin.Enforcer, pool *pgxpool.Pool, requiredPermissions ...string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, done := DecodeJwt(c)
 		if done {
@@ -20,21 +23,20 @@ func AuthRequired(enforcer *casbin.Enforcer, db *sql.DB, requiredPermissions ...
 		}
 
 		if claims.Type == auth.TypeAccessToken {
-			HandleAccessTokenAuth(c, db, claims, requiredPermissions, enforcer)
+			HandleAccessTokenAuth(c, pool, claims, requiredPermissions, enforcer)
 			return
 		}
 
 		if claims.Type == auth.TypeSession {
-			HandleSessionTokenAuth(c, db, requiredPermissions, enforcer)
+			HandleSessionTokenAuth(c, pool, requiredPermissions, enforcer)
 			return
 		}
 
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token type"})
-		return
 	}
 }
 
-func SessionRequired(db *sql.DB) gin.HandlerFunc {
+func SessionRequired(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		claims, done := DecodeJwt(c)
 		if done {
@@ -46,7 +48,7 @@ func SessionRequired(db *sql.DB) gin.HandlerFunc {
 			return
 		}
 
-		if !sessionExists(db, claims.RegisteredClaims.ID, claims.UserID) {
+		if !sessionExists(pool, claims.RegisteredClaims.ID, claims.UserID) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired or revoked"})
 			return
 		}
@@ -65,13 +67,22 @@ func NotAuthenticated(c *gin.Context) {
 	c.Next()
 }
 
-func sessionExists(db *sql.DB, sessionID, userID string) bool {
-	var exists int
-	err := db.QueryRow(
-		"SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2 AND expires_at > now()",
-		sessionID, userID,
-	).Scan(&exists)
-	return err == nil
+func sessionExists(pool *pgxpool.Pool, sessionID, userID string) bool {
+	sid, err := strconv.ParseInt(sessionID, 10, 64)
+	if err != nil {
+		return false
+	}
+	uid, err := strconv.ParseInt(userID, 10, 64)
+	if err != nil {
+		return false
+	}
+
+	q := dbsqlc.New(pool)
+	exists, err := q.SessionExists(context.Background(), dbsqlc.SessionExistsParams{
+		ID:     sid,
+		UserID: uid,
+	})
+	return err == nil && exists
 }
 
 func DecodeJwt(c *gin.Context) (*auth.Claims, bool) {
@@ -99,11 +110,11 @@ func DecodeJwt(c *gin.Context) (*auth.Claims, bool) {
 	return claims, false
 }
 
-func HandleSessionTokenAuth(c *gin.Context, db *sql.DB, requiredPermissions []string, enforcer *casbin.Enforcer) {
+func HandleSessionTokenAuth(c *gin.Context, pool *pgxpool.Pool, requiredPermissions []string, enforcer *casbin.Enforcer) {
 	userID := c.GetString("userID")
 	sessionID := c.GetString("sessionID")
 
-	if !sessionExists(db, sessionID, userID) {
+	if !sessionExists(pool, sessionID, userID) {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired or revoked"})
 		return
 	}
@@ -128,25 +139,34 @@ func HandleSessionTokenAuth(c *gin.Context, db *sql.DB, requiredPermissions []st
 
 func HandleAccessTokenAuth(
 	c *gin.Context,
-	db *sql.DB,
+	pool *pgxpool.Pool,
 	claims *auth.Claims,
 	requiredPermissions []string,
 	enforcer *casbin.Enforcer,
 ) {
-	var scopesJson []byte
-	var revoked bool
-	err := db.QueryRow(
-		"SELECT scopes, revoked FROM access_tokens WHERE id = $1 AND user_id = $2 AND expires_at > now()",
-		claims.TokenId, claims.UserID,
-	).Scan(&scopesJson, &revoked)
+	tokenID, err := strconv.ParseInt(claims.TokenId, 10, 64)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
+	userID, err := strconv.ParseInt(claims.UserID, 10, 64)
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
+		return
+	}
 
-	if err != nil || revoked {
+	q := dbsqlc.New(pool)
+	row, err := q.GetTokenAuth(c.Request.Context(), dbsqlc.GetTokenAuthParams{
+		ID:     tokenID,
+		UserID: userID,
+	})
+	if err != nil || row.Revoked.Bool {
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid token"})
 		return
 	}
 
 	var scopes []string
-	if err := json.Unmarshal(scopesJson, &scopes); err != nil {
+	if err := json.Unmarshal(row.Scopes, &scopes); err != nil {
 		c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "internal error"})
 		return
 	}
