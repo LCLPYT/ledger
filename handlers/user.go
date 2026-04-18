@@ -135,10 +135,8 @@ func CreateToken(pool *pgxpool.Pool, enforcer *casbin.Enforcer) gin.HandlerFunc 
 
 func ListTokens(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.GetString("userID")
-		userIDInt, err := strconv.ParseInt(userID, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+		userIDInt, ok := parseUserID(c)
+		if !ok {
 			return
 		}
 
@@ -171,10 +169,8 @@ func ListTokens(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func RevokeToken(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.GetString("userID")
-		userIDInt, err := strconv.ParseInt(userID, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+		userIDInt, ok := parseUserID(c)
+		if !ok {
 			return
 		}
 		tokenID, err := strconv.ParseInt(c.Param("id"), 10, 64)
@@ -226,10 +222,8 @@ func ListUsers(pool *pgxpool.Pool) gin.HandlerFunc {
 
 func GetUser(pool *pgxpool.Pool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		userID := c.GetString("userID")
-		userIDInt, err := strconv.ParseInt(userID, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+		userIDInt, ok := parseUserID(c)
+		if !ok {
 			return
 		}
 
@@ -373,9 +367,15 @@ func VerifyInvitation(pool *pgxpool.Pool) gin.HandlerFunc {
 	}
 }
 
-// verifyCurrentPassword fetches the user's password hash and checks it against
-// the provided password. Returns false and writes the appropriate JSON error
-// response if the check fails, so the caller can return immediately.
+func parseUserID(c *gin.Context) (int64, bool) {
+	id, err := strconv.ParseInt(c.GetString("userID"), 10, 64)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+		return 0, false
+	}
+	return id, true
+}
+
 func verifyCurrentPassword(c *gin.Context, q *dbsqlc.Queries, userIDInt int64, password string) bool {
 	passwordHash, err := q.GetUserPassword(context.Background(), userIDInt)
 	if err != nil {
@@ -397,10 +397,8 @@ func ChangePassword(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		userID := c.GetString("userID")
-		userIDInt, err := strconv.ParseInt(userID, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+		userIDInt, ok := parseUserID(c)
+		if !ok {
 			return
 		}
 
@@ -445,10 +443,8 @@ func UpdateUsername(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		userID := c.GetString("userID")
-		userIDInt, err := strconv.ParseInt(userID, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+		userIDInt, ok := parseUserID(c)
+		if !ok {
 			return
 		}
 
@@ -481,10 +477,8 @@ func UpdateEmail(pool *pgxpool.Pool) gin.HandlerFunc {
 			return
 		}
 
-		userID := c.GetString("userID")
-		userIDInt, err := strconv.ParseInt(userID, 10, 64)
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "invalid user id"})
+		userIDInt, ok := parseUserID(c)
+		if !ok {
 			return
 		}
 

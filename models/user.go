@@ -31,19 +31,23 @@ type VerifyInvitationRequest struct {
 	Password string `json:"password" binding:"required,min=8"`
 }
 
-type ChangePasswordRequest struct {
+type currentPasswordField struct {
 	CurrentPassword string `json:"current_password" binding:"required"`
-	NewPassword     string `json:"new_password"     binding:"required"`
+}
+
+type ChangePasswordRequest struct {
+	currentPasswordField
+	NewPassword string `json:"new_password" binding:"required"`
 }
 
 type UpdateUsernameRequest struct {
-	Username        string `json:"username"         binding:"required"`
-	CurrentPassword string `json:"current_password" binding:"required"`
+	currentPasswordField
+	Username string `json:"username" binding:"required"`
 }
 
 type UpdateEmailRequest struct {
-	Email           string `json:"email"            binding:"required,email"`
-	CurrentPassword string `json:"current_password" binding:"required"`
+	currentPasswordField
+	Email string `json:"email" binding:"required,email"`
 }
 
 type AccessToken struct {
