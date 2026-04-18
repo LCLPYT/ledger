@@ -33,7 +33,11 @@ func TestMain(m *testing.M) {
 		dsn = "postgres://db:db@localhost:5433/db?sslmode=disable"
 	}
 
-	testPool = appdb.InitDB(dsn)
+	pool, cancel := appdb.InitDB(dsn)
+	defer cancel()
+
+	testPool = pool
+
 	testEnforcer = appdb.InitCasbin(dsn)
 
 	code := m.Run()

@@ -33,8 +33,10 @@ func RunUser(args []string) {
 
 func runCreateUser() {
 	dsn := os.Getenv("DATABASE_URL")
-	pool := appdb.InitDB(dsn)
-	defer pool.Close()
+
+	pool, cancel := appdb.InitDB(dsn)
+	defer cancel()
+
 	queries := dbsqlc.New(pool)
 
 	enforcer := appdb.InitCasbin(dsn)

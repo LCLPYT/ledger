@@ -28,8 +28,10 @@ func RunRoles(args []string) {
 
 func runInitRoles() {
 	dsn := os.Getenv("DATABASE_URL")
-	pool := db.InitDB(dsn)
-	defer pool.Close()
+
+	pool, cancel := db.InitDB(dsn)
+	defer cancel()
+
 	q := dbsqlc.New(pool)
 
 	enforcer := db.InitCasbin(dsn)

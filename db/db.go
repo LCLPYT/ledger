@@ -24,12 +24,14 @@ var casbinModel string
 
 // InitDB creates a pgxpool, runs migrations, and returns the pool.
 // Callers that need a *sql.DB (e.g. for Gin handlers) should wrap with stdlib.OpenDBFromPool.
-func InitDB(dsn string) *pgxpool.Pool {
+func InitDB(dsn string) (*pgxpool.Pool, context.CancelFunc) {
 	if dsn == "" {
 		panic(errors.New("database URL is empty"))
 	}
 
-	pool, err := pgxpool.New(context.Background(), dsn)
+	rootCtx, cancel := context.WithCancel(context.Background())
+
+	pool, err := pgxpool.New(rootCtx, dsn)
 	if err != nil {
 		panic(err)
 	}
@@ -57,7 +59,7 @@ func InitDB(dsn string) *pgxpool.Pool {
 		log.Fatalf("Migration failed: %v", err)
 	}
 
-	return pool
+	return pool, cancel
 }
 
 func InitCasbin(dsn string) *casbin.Enforcer {

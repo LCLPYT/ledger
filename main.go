@@ -38,8 +38,8 @@ func printUsage() {
 
 func runServe() {
 	dsn := os.Getenv("DATABASE_URL")
-	pool := db.InitDB(dsn)
-	defer pool.Close()
+	pool, cancel := db.InitDB(dsn)
+	defer cancel()
 
 	enforcer := db.InitCasbin(dsn)
 	r := gin.Default()
