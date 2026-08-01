@@ -30,12 +30,16 @@ func setupConfig() *viper.Viper {
 	v.SetDefault("host", "localhost")
 	v.SetDefault("port", "8080")
 	v.SetDefault("trusted_proxies", []string{})
+	v.SetDefault("mode", gin.DebugMode)
 
 	return v
 }
 
 func serve(v *viper.Viper) {
-	router := gin.Default()
+	gin.SetMode(v.GetString("mode"))
+
+	router := gin.New()
+	router.Use(gin.Logger(), api.Recovery())
 
 	trustedProxies := v.GetStringSlice("trusted_proxies")
 	err := router.SetTrustedProxies(trustedProxies)

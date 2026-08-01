@@ -1,6 +1,7 @@
 package api
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -33,10 +34,24 @@ func OK(c *gin.Context, data any) {
 	})
 }
 
-// Fail sends an error response.
-//func Fail(c *gin.Context, status int, code, message string) {
-//	c.JSON(status, Response{
-//		Success: false,
-//		Error:   &ErrorInfo{Code: code, Message: message},
-//	})
-//}
+func Fail(c *gin.Context, status int, code, message string) {
+	c.JSON(status, Response{
+		Success: false,
+		Error:   &ErrorInfo{Code: code, Message: message},
+	})
+}
+
+func Recovery() gin.HandlerFunc {
+	return gin.CustomRecovery(func(c *gin.Context, recovered any) {
+		log.Printf("panic: %v\n", recovered)
+
+		Fail(c, http.StatusInternalServerError, "internal_error", "internal server error")
+
+		c.Abort()
+	})
+}
+
+// NotFound returns a JSON 404 envelope for unmatched routes.
+func NotFound(c *gin.Context) {
+	Fail(c, http.StatusNotFound, "not_found", "resource not found")
+}
