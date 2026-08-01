@@ -46,7 +46,6 @@ func setupServeConfig(cmd *cobra.Command) (*viper.Viper, error) {
 	v.SetDefault("host", "localhost")
 	v.SetDefault("port", "8080")
 	v.SetDefault("trusted_proxies", []string{})
-	v.SetDefault("mode", gin.DebugMode)
 
 	if err := v.BindPFlag("port", cmd.Flags().Lookup("port")); err != nil {
 		return nil, err
@@ -60,8 +59,6 @@ func setupServeConfig(cmd *cobra.Command) (*viper.Viper, error) {
 }
 
 func serve(v *viper.Viper) error {
-	gin.SetMode(v.GetString("mode"))
-
 	router := gin.New()
 	router.Use(gin.Logger(), api.Recovery())
 
