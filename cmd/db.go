@@ -39,18 +39,25 @@ func init() {
 	rootCmd.AddCommand(dbCmd)
 }
 
-func newMigrator() *migrate.Migrator {
-	v := config.CreateCommonConfig()
-	db.ConfigureDatabaseDefaults(v)
+func newMigrator() (*migrate.Migrator, error) {
+	v, err := config.CreateCommonConfig()
+	if err != nil {
+		return nil, err
+	}
 
-	return migrate.NewMigrator(db.ConnectDatabase(v), migrations.Migrations)
+	return migrate.NewMigrator(db.ConnectDatabase(v), migrations.Migrations), nil
 }
 
 var dbInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Create migration tables",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return newMigrator().Init(cmd.Context())
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
+
+		return migrator.Init(cmd.Context())
 	},
 }
 
@@ -58,7 +65,10 @@ var dbMigrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Migrate database",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator := newMigrator()
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
 
 		if err := migrator.Lock(cmd.Context()); err != nil {
 			return err
@@ -86,7 +96,10 @@ var dbRollbackCmd = &cobra.Command{
 	Use:   "rollback",
 	Short: "Rollback the last migration group",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator := newMigrator()
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
 
 		if err := migrator.Lock(cmd.Context()); err != nil {
 			return err
@@ -114,7 +127,12 @@ var dbLockCmd = &cobra.Command{
 	Use:   "lock",
 	Short: "Lock migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return newMigrator().Lock(cmd.Context())
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
+
+		return migrator.Lock(cmd.Context())
 	},
 }
 
@@ -122,7 +140,12 @@ var dbUnlockCmd = &cobra.Command{
 	Use:   "unlock",
 	Short: "Unlock migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		return newMigrator().Unlock(cmd.Context())
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
+
+		return migrator.Unlock(cmd.Context())
 	},
 }
 
@@ -131,8 +154,12 @@ var dbCreateGoCmd = &cobra.Command{
 	Short: "Create Go migration",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.Join(args, "_")
-		mf, err := newMigrator().CreateGoMigration(cmd.Context(), name)
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
 
+		mf, err := migrator.CreateGoMigration(cmd.Context(), name)
 		if err != nil {
 			return err
 		}
@@ -147,8 +174,12 @@ var dbCreateSQLCmd = &cobra.Command{
 	Short: "Create up and down SQL migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.Join(args, "_")
-		files, err := newMigrator().CreateSQLMigrations(cmd.Context(), name)
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
 
+		files, err := migrator.CreateSQLMigrations(cmd.Context(), name)
 		if err != nil {
 			return err
 		}
@@ -166,8 +197,12 @@ var dbCreateTxSQLCmd = &cobra.Command{
 	Short: "Create up and down transactional SQL migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.Join(args, "_")
-		files, err := newMigrator().CreateTxSQLMigrations(cmd.Context(), name)
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
 
+		files, err := migrator.CreateTxSQLMigrations(cmd.Context(), name)
 		if err != nil {
 			return err
 		}
@@ -184,8 +219,12 @@ var dbStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Print migrations status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		ms, err := newMigrator().MigrationsWithStatus(cmd.Context())
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
 
+		ms, err := migrator.MigrationsWithStatus(cmd.Context())
 		if err != nil {
 			return err
 		}
@@ -201,8 +240,12 @@ var dbMarkAppliedCmd = &cobra.Command{
 	Use:   "mark_applied",
 	Short: "Mark migrations as applied without actually running them",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		group, err := newMigrator().Migrate(cmd.Context(), migrate.WithNopMigration())
+		migrator, err := newMigrator()
+		if err != nil {
+			return err
+		}
 
+		group, err := migrator.Migrate(cmd.Context(), migrate.WithNopMigration())
 		if err != nil {
 			return err
 		}

@@ -40,7 +40,10 @@ func init() {
 }
 
 func setupServeConfig(cmd *cobra.Command) (*viper.Viper, error) {
-	v := config.CreateCommonConfig()
+	v, err := config.CreateCommonConfig()
+	if err != nil {
+		return nil, err
+	}
 
 	v.SetDefault("host", "localhost")
 	v.SetDefault("port", "8080")
