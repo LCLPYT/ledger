@@ -9,6 +9,7 @@ import (
 	"ledger/db/migrations"
 
 	"github.com/spf13/cobra"
+	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/migrate"
 )
 
@@ -39,23 +40,30 @@ func init() {
 	rootCmd.AddCommand(dbCmd)
 }
 
-func newMigrator() (*migrate.Migrator, error) {
+func newMigrator() (*migrate.Migrator, *bun.DB, error) {
 	v, err := config.CreateCommonConfig()
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return migrate.NewMigrator(db.ConnectDatabase(v), migrations.Migrations), nil
+	database, err := db.ConnectDatabase(v)
+
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return migrate.NewMigrator(database, migrations.Migrations), database, nil
 }
 
 var dbInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Create migration tables",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		return migrator.Init(cmd.Context())
 	},
@@ -65,10 +73,11 @@ var dbMigrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Migrate database",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		if err := migrator.Lock(cmd.Context()); err != nil {
 			return err
@@ -96,10 +105,11 @@ var dbRollbackCmd = &cobra.Command{
 	Use:   "rollback",
 	Short: "Rollback the last migration group",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		if err := migrator.Lock(cmd.Context()); err != nil {
 			return err
@@ -127,10 +137,11 @@ var dbLockCmd = &cobra.Command{
 	Use:   "lock",
 	Short: "Lock migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		return migrator.Lock(cmd.Context())
 	},
@@ -140,10 +151,11 @@ var dbUnlockCmd = &cobra.Command{
 	Use:   "unlock",
 	Short: "Unlock migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		return migrator.Unlock(cmd.Context())
 	},
@@ -154,10 +166,11 @@ var dbCreateGoCmd = &cobra.Command{
 	Short: "Create Go migration",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.Join(args, "_")
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		mf, err := migrator.CreateGoMigration(cmd.Context(), name)
 		if err != nil {
@@ -174,10 +187,11 @@ var dbCreateSQLCmd = &cobra.Command{
 	Short: "Create up and down SQL migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.Join(args, "_")
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		files, err := migrator.CreateSQLMigrations(cmd.Context(), name)
 		if err != nil {
@@ -197,10 +211,11 @@ var dbCreateTxSQLCmd = &cobra.Command{
 	Short: "Create up and down transactional SQL migrations",
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := strings.Join(args, "_")
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		files, err := migrator.CreateTxSQLMigrations(cmd.Context(), name)
 		if err != nil {
@@ -219,10 +234,11 @@ var dbStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Print migrations status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		ms, err := migrator.MigrationsWithStatus(cmd.Context())
 		if err != nil {
@@ -240,10 +256,11 @@ var dbMarkAppliedCmd = &cobra.Command{
 	Use:   "mark_applied",
 	Short: "Mark migrations as applied without actually running them",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, err := newMigrator()
+		migrator, database, err := newMigrator()
 		if err != nil {
 			return err
 		}
+		defer database.Close()
 
 		group, err := migrator.Migrate(cmd.Context(), migrate.WithNopMigration())
 		if err != nil {

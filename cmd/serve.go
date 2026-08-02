@@ -46,7 +46,7 @@ func setupServeConfig(cmd *cobra.Command) (*viper.Viper, error) {
 	}
 
 	v.SetDefault("host", "localhost")
-	v.SetDefault("port", "8080")
+	v.SetDefault("port", 8080)
 	v.SetDefault("trusted_proxies", []string{})
 
 	if err := v.BindPFlag("port", cmd.Flags().Lookup("port")); err != nil {

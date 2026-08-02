@@ -3,7 +3,7 @@ package db
 import (
 	"database/sql"
 	"fmt"
-	"log"
+	"time"
 
 	"github.com/spf13/viper"
 	"github.com/uptrace/bun"
@@ -11,17 +11,21 @@ import (
 	"github.com/uptrace/bun/driver/pgdriver"
 )
 
-func ConnectDatabase(v *viper.Viper) *bun.DB {
-	db := connectPostgres(v)
-
-	if err := db.Ping(); err != nil {
-		log.Fatal("Failed to connect to database:", err)
+func ConnectDatabase(v *viper.Viper) (*bun.DB, error) {
+	db, err := connectPostgres(v)
+	if err != nil {
+		return nil, err
 	}
 
-	return db
+	if err := db.Ping(); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("ping database: %w", err)
+	}
+
+	return db, nil
 }
 
-func connectPostgres(v *viper.Viper) *bun.DB {
+func connectPostgres(v *viper.Viper) (*bun.DB, error) {
 	v.SetDefault("database_port", 5432)
 
 	user := v.GetString("database_user")
@@ -31,19 +35,19 @@ func connectPostgres(v *viper.Viper) *bun.DB {
 	database := v.GetString("database_name")
 
 	if user == "" {
-		panic("postgres database user not specified")
+		return nil, fmt.Errorf("postgres database user not specified")
 	}
 
 	if password == "" {
-		panic("postgres database password not specified")
+		return nil, fmt.Errorf("postgres database password not specified")
 	}
 
 	if host == "" {
-		panic("postgres database host not specified")
+		return nil, fmt.Errorf("postgres database host not specified")
 	}
 
 	if database == "" {
-		panic("postgres database name not specified")
+		return nil, fmt.Errorf("postgres database name not specified")
 	}
 
 	dsn := fmt.Sprintf("postgres://%s:%s@%s:%d/%s?sslmode=disable", user, password, host, port, database)
@@ -52,7 +56,11 @@ func connectPostgres(v *viper.Viper) *bun.DB {
 		pgdriver.WithDSN(dsn),
 	))
 
+	sqldb.SetMaxOpenConns(25)
+	sqldb.SetMaxIdleConns(25)
+	sqldb.SetConnMaxLifetime(5 * time.Minute)
+
 	db := bun.NewDB(sqldb, pgdialect.New())
 
-	return db
+	return db, nil
 }
