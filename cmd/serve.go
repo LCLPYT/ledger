@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"ledger/api"
+	"ledger/config"
 	"log"
 	"net/http"
 	"os"
@@ -39,9 +40,7 @@ func init() {
 }
 
 func setupServeConfig(cmd *cobra.Command) (*viper.Viper, error) {
-	v := viper.New()
-	v.SetEnvPrefix("ledger")
-	v.AutomaticEnv()
+	v := config.CreateCommonConfig()
 
 	v.SetDefault("host", "localhost")
 	v.SetDefault("port", "8080")
