@@ -40,13 +40,18 @@ func init() {
 	rootCmd.AddCommand(dbCmd)
 }
 
-func newMigrator() (*migrate.Migrator, *bun.DB, error) {
+func ConnectCmdDatabase() (*bun.DB, error) {
 	v, err := config.CreateCommonConfig()
+
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	database, err := db.ConnectDatabase(v)
+	return db.ConnectDatabase(v)
+}
+
+func newMigrator() (*migrate.Migrator, *bun.DB, error) {
+	database, err := ConnectCmdDatabase()
 
 	if err != nil {
 		return nil, nil, err
