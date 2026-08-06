@@ -1,5 +1,7 @@
+health_fmt := '{{.Health}}'
+
 db:
-    docker compose up postgres -d --wait
+    [ "$(docker compose ps postgres --format '{{ health_fmt }}')" = "healthy" ] || docker compose up postgres -d --wait
 
 psql: db
     docker compose exec -it postgres psql -U db
@@ -14,4 +16,5 @@ serve: db
     go run . serve
 
 migrate: db
+    go run . db init
     go run . db migrate

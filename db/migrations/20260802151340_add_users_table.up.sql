@@ -8,5 +8,6 @@ CREATE TABLE users (
     email TEXT NOT NULL UNIQUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT current_timestamp,
-    deleted_at TIMESTAMPTZ
+    deleted_at TIMESTAMPTZ,
+    password_hash BYTEA NOT NULL DEFAULT '\x00'
 );
