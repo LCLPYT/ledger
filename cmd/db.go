@@ -7,6 +7,7 @@ import (
 	"ledger/config"
 	"ledger/db"
 	"ledger/db/migrations"
+	"ledger/model"
 
 	"github.com/spf13/cobra"
 	"github.com/uptrace/bun"
@@ -33,6 +34,7 @@ func init() {
 		dbCreateGoCmd,
 		dbCreateSQLCmd,
 		dbCreateTxSQLCmd,
+		dbCreateAutoCmd,
 		dbStatusCmd,
 		dbMarkAppliedCmd,
 	)
@@ -231,6 +233,43 @@ var dbCreateTxSQLCmd = &cobra.Command{
 			fmt.Printf("created transaction migration %s (%s)\n", mf.Name, mf.Path)
 		}
 
+		return nil
+	},
+}
+
+var dbCreateAutoCmd = &cobra.Command{
+	Use:   "create_auto",
+	Short: "Generate SQL migrations from the model diff",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		database, err := ConnectCmdDatabase()
+		if err != nil {
+			return err
+		}
+		defer database.Close()
+
+		am, err := migrate.NewAutoMigrator(database,
+			migrate.WithModel(model.AllModels...),
+			migrate.WithMigrationsDirectoryAuto("db/migrations"),
+		)
+		if err != nil {
+			return err
+		}
+
+		files, err := am.CreateTxSQLMigrations(cmd.Context())
+		if err != nil {
+			return err
+		}
+
+		if len(files) == 0 {
+			fmt.Printf("No changes detected (models match database schema)\n")
+			return nil
+		}
+
+		for _, mf := range files {
+			fmt.Printf("Created migration %s (%s)\n", mf.Name, mf.Path)
+		}
+
+		fmt.Printf("Review the generated SQL before running db migrate\n")
 		return nil
 	},
 }

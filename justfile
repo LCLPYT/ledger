@@ -18,3 +18,6 @@ serve: db
 migrate: db
     go run . db init
     go run . db migrate
+
+create_auto: db
+    go run . db create_auto
