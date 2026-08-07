@@ -19,5 +19,5 @@ migrate: db
     go run . db init
     go run . db migrate
 
-create_auto: db
+create_auto: migrate
     go run . db create_auto
