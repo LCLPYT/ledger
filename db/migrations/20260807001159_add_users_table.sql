@@ -1,7 +1,4 @@
-SET statement_timeout = 0;
-
---bun:split
-
+-- +goose Up
 CREATE TABLE "users" (
     "id" BIGSERIAL NOT NULL,
     "name" text NOT NULL,
@@ -14,3 +11,6 @@ CREATE TABLE "users" (
     PRIMARY KEY ("id"),
     UNIQUE ("email")
 );
+
+-- +goose Down
+DROP TABLE "users";

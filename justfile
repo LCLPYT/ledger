@@ -16,8 +16,14 @@ serve: db
     go run . serve
 
 migrate: db
-    go run . db init
     go run . db migrate
 
-create_auto: migrate
-    go run . db create_auto
+rollback: db
+    go run . db rollback
+
+status: db
+    go run . db status
+
+generate: migrate
+    PSQL_DSN="$(go run . db dsn)" go run github.com/stephenafamo/bob/gen/bobgen-psql@v0.50.0 -c bobgen.yaml
+    go build ./...

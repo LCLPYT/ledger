@@ -1,0 +1,21 @@
+no_tests: true
+
+psql:
+  driver: github.com/jackc/pgx/v5/stdlib
+  schemas: ["public"]
+  except:
+    goose_db_version:
+
+plugins:
+  models:
+    destination: model
+    pkgname: model
+  enums:
+    destination: model/enums
+    pkgname: enums
+  dbinfo:
+    disabled: true
+  dberrors:
+    disabled: true
+  factory:
+    disabled: true

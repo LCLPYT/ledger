@@ -12,6 +12,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/aarondl/opt/omit"
 	"github.com/spf13/cobra"
 	"golang.org/x/crypto/bcrypt"
 	"golang.org/x/term"
@@ -128,11 +129,9 @@ var makeUserCmd = &cobra.Command{
 			return err
 		}
 
-		emailExists, err := db.NewSelect().
-			Model((*model.User)(nil)).
-			Where("email = ?", email).
-			WhereAllWithDeleted().
-			Exists(cmd.Context())
+		emailExists, err := model.Users.Query(
+			model.SelectWhere.Users.Email.EQ(email),
+		).Exists(cmd.Context(), db)
 
 		if err != nil {
 			return err
@@ -170,15 +169,11 @@ var makeUserCmd = &cobra.Command{
 			return err
 		}
 
-		user := model.User{
-			Name:         username,
-			Email:        email,
-			PasswordHash: passwordHash,
-		}
-
-		_, err = db.NewInsert().
-			Model(&user).
-			Exec(cmd.Context())
+		user, err := model.Users.Insert(&model.UserSetter{
+			Name:         omit.From(username),
+			Email:        omit.From(email),
+			PasswordHash: omit.From(passwordHash),
+		}).One(cmd.Context(), db)
 
 		if err != nil {
 			return err

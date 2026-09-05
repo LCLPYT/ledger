@@ -1,23 +1,23 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
+	"path/filepath"
 	"strings"
+	"time"
 
 	"ledger/config"
 	"ledger/db"
 	"ledger/db/migrations"
-	"ledger/model"
 
+	"github.com/pressly/goose/v3"
+	"github.com/pressly/goose/v3/lock"
 	"github.com/spf13/cobra"
-	"github.com/uptrace/bun"
-	"github.com/uptrace/bun/migrate"
+	"github.com/stephenafamo/bob"
 )
 
-/*
-Ported from bun example:
-https://github.com/uptrace/bun/blob/0e5e8682686253e24add0e8512d351d5e32dd9bf/example/migrate/main.go
-*/
+const migrationsDir = "db/migrations"
 
 var dbCmd = &cobra.Command{
 	Use:   "db",
@@ -26,250 +26,112 @@ var dbCmd = &cobra.Command{
 
 func init() {
 	dbCmd.AddCommand(
-		dbInitCmd,
 		dbMigrateCmd,
 		dbRollbackCmd,
-		dbLockCmd,
-		dbUnlockCmd,
-		dbCreateGoCmd,
-		dbCreateSQLCmd,
-		dbCreateTxSQLCmd,
-		dbCreateAutoCmd,
 		dbStatusCmd,
-		dbMarkAppliedCmd,
+		dbCreateCmd,
+		dbDSNCmd,
 	)
 
 	rootCmd.AddCommand(dbCmd)
 }
 
-func ConnectCmdDatabase() (*bun.DB, error) {
+func ConnectCmdDatabase() (bob.DB, error) {
+	v, err := config.CreateCommonConfig()
+
+	if err != nil {
+		return bob.DB{}, err
+	}
+
+	return db.ConnectDatabase(v)
+}
+
+func newProvider() (*goose.Provider, error) {
 	v, err := config.CreateCommonConfig()
 
 	if err != nil {
 		return nil, err
 	}
 
-	return db.ConnectDatabase(v)
-}
-
-func newMigrator() (*migrate.Migrator, *bun.DB, error) {
-	database, err := ConnectCmdDatabase()
+	sqldb, err := db.OpenSQL(v)
 
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return migrate.NewMigrator(database, migrations.Migrations), database, nil
-}
+	locker, err := lock.NewPostgresSessionLocker()
 
-var dbInitCmd = &cobra.Command{
-	Use:   "init",
-	Short: "Create migration tables",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, database, err := newMigrator()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
+	if err != nil {
+		sqldb.Close()
+		return nil, err
+	}
 
-		return migrator.Init(cmd.Context())
-	},
+	provider, err := goose.NewProvider(
+		goose.DialectPostgres,
+		sqldb,
+		migrations.FS,
+		goose.WithSessionLocker(locker),
+	)
+
+	if err != nil {
+		sqldb.Close()
+		return nil, err
+	}
+
+	return provider, nil
 }
 
 var dbMigrateCmd = &cobra.Command{
 	Use:   "migrate",
 	Short: "Migrate database",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, database, err := newMigrator()
+		provider, err := newProvider()
 		if err != nil {
 			return err
 		}
-		defer database.Close()
+		defer provider.Close()
 
-		if err := migrator.Lock(cmd.Context()); err != nil {
-			return err
-		}
-
-		defer migrator.Unlock(cmd.Context())
-
-		group, err := migrator.Migrate(cmd.Context())
+		results, err := provider.Up(cmd.Context())
 
 		if err != nil {
 			return err
 		}
 
-		if group.IsZero() {
+		if len(results) == 0 {
 			fmt.Printf("There are no new migrations to run (database is up to date)\n")
 			return nil
 		}
 
-		fmt.Printf("Migrated to %s\n", group)
+		for _, result := range results {
+			fmt.Printf("Migrated %s\n", filepath.Base(result.Source.Path))
+		}
+
 		return nil
 	},
 }
 
 var dbRollbackCmd = &cobra.Command{
 	Use:   "rollback",
-	Short: "Rollback the last migration group",
+	Short: "Roll back the last migration",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, database, err := newMigrator()
+		provider, err := newProvider()
 		if err != nil {
 			return err
 		}
-		defer database.Close()
+		defer provider.Close()
 
-		if err := migrator.Lock(cmd.Context()); err != nil {
-			return err
-		}
-
-		defer migrator.Unlock(cmd.Context())
-
-		group, err := migrator.Rollback(cmd.Context())
+		result, err := provider.Down(cmd.Context())
 
 		if err != nil {
+			if errors.Is(err, goose.ErrNoNextVersion) {
+				fmt.Printf("There are no migrations to roll back\n")
+				return nil
+			}
+
 			return err
 		}
 
-		if group.IsZero() {
-			fmt.Printf("There are no groups to roll back\n")
-			return nil
-		}
-
-		fmt.Printf("Rolled back %s\n", group)
-		return nil
-	},
-}
-
-var dbLockCmd = &cobra.Command{
-	Use:   "lock",
-	Short: "Lock migrations",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, database, err := newMigrator()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
-
-		return migrator.Lock(cmd.Context())
-	},
-}
-
-var dbUnlockCmd = &cobra.Command{
-	Use:   "unlock",
-	Short: "Unlock migrations",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, database, err := newMigrator()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
-
-		return migrator.Unlock(cmd.Context())
-	},
-}
-
-var dbCreateGoCmd = &cobra.Command{
-	Use:   "create_go",
-	Short: "Create Go migration",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := strings.Join(args, "_")
-		migrator, database, err := newMigrator()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
-
-		mf, err := migrator.CreateGoMigration(cmd.Context(), name)
-		if err != nil {
-			return err
-		}
-
-		fmt.Printf("created migration %s (%s)\n", mf.Name, mf.Path)
-		return nil
-	},
-}
-
-var dbCreateSQLCmd = &cobra.Command{
-	Use:   "create_sql",
-	Short: "Create up and down SQL migrations",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := strings.Join(args, "_")
-		migrator, database, err := newMigrator()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
-
-		files, err := migrator.CreateSQLMigrations(cmd.Context(), name)
-		if err != nil {
-			return err
-		}
-
-		for _, mf := range files {
-			fmt.Printf("Created migration %s (%s)\n", mf.Name, mf.Path)
-		}
-
-		return nil
-	},
-}
-
-var dbCreateTxSQLCmd = &cobra.Command{
-	Use:   "create_tx_sql",
-	Short: "Create up and down transactional SQL migrations",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		name := strings.Join(args, "_")
-		migrator, database, err := newMigrator()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
-
-		files, err := migrator.CreateTxSQLMigrations(cmd.Context(), name)
-		if err != nil {
-			return err
-		}
-
-		for _, mf := range files {
-			fmt.Printf("created transaction migration %s (%s)\n", mf.Name, mf.Path)
-		}
-
-		return nil
-	},
-}
-
-var dbCreateAutoCmd = &cobra.Command{
-	Use:   "create_auto",
-	Short: "Generate SQL migrations from the model diff",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		database, err := ConnectCmdDatabase()
-		if err != nil {
-			return err
-		}
-		defer database.Close()
-
-		am, err := migrate.NewAutoMigrator(database,
-			migrate.WithModel(model.AllModels...),
-			migrate.WithMigrationsDirectoryAuto("db/migrations"),
-		)
-		if err != nil {
-			return err
-		}
-
-		files, err := am.CreateTxSQLMigrations(cmd.Context())
-		if err != nil {
-			return err
-		}
-
-		if len(files) == 0 {
-			fmt.Printf("No changes detected (models match database schema)\n")
-			return nil
-		}
-
-		for _, mf := range files {
-			fmt.Printf("Created migration %s (%s)\n", mf.Name, mf.Path)
-		}
-
-		fmt.Printf("Review the generated SQL before running db migrate\n")
+		fmt.Printf("Rolled back %s\n", filepath.Base(result.Source.Path))
 		return nil
 	},
 }
@@ -278,45 +140,72 @@ var dbStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Print migrations status",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, database, err := newMigrator()
+		provider, err := newProvider()
 		if err != nil {
 			return err
 		}
-		defer database.Close()
+		defer provider.Close()
 
-		ms, err := migrator.MigrationsWithStatus(cmd.Context())
+		statuses, err := provider.Status(cmd.Context())
+
 		if err != nil {
 			return err
 		}
 
-		fmt.Printf("Migrations: %s\n", ms)
-		fmt.Printf("Unapplied migrations: %s\n", ms.Unapplied())
-		fmt.Printf("Last migration group: %s\n", ms.LastGroup())
+		for _, status := range statuses {
+			applied := "-"
+
+			if !status.AppliedAt.IsZero() {
+				applied = status.AppliedAt.Format(time.RFC3339)
+			}
+
+			fmt.Printf("%-16d %-40s %-8s %s\n",
+				status.Source.Version,
+				filepath.Base(status.Source.Path),
+				status.State,
+				applied,
+			)
+		}
+
+		current, target, err := provider.GetVersions(cmd.Context())
+
+		if err != nil {
+			return err
+		}
+
+		fmt.Printf("Current version: %d (latest: %d)\n", current, target)
 		return nil
 	},
 }
 
-var dbMarkAppliedCmd = &cobra.Command{
-	Use:   "mark_applied",
-	Short: "Mark migrations as applied without actually running them",
+var dbCreateCmd = &cobra.Command{
+	Use:   "create <name>",
+	Short: "Create an up and down SQL migration",
+	Args:  cobra.MinimumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		migrator, database, err := newMigrator()
+		name := strings.Join(args, "_")
+
+		return goose.Create(nil, migrationsDir, name, "sql")
+	},
+}
+
+var dbDSNCmd = &cobra.Command{
+	Use:   "dsn",
+	Short: "Print the database connection string",
+	RunE: func(cmd *cobra.Command, args []string) error {
+		v, err := config.CreateCommonConfig()
+
 		if err != nil {
 			return err
 		}
-		defer database.Close()
 
-		group, err := migrator.Migrate(cmd.Context(), migrate.WithNopMigration())
+		dsn, err := db.DSN(v)
+
 		if err != nil {
 			return err
 		}
 
-		if group.IsZero() {
-			fmt.Printf("There are no new migrations to mark as applied\n")
-			return nil
-		}
-
-		fmt.Printf("Marked as applied %s\n", group)
+		fmt.Println(dsn)
 		return nil
 	},
 }
