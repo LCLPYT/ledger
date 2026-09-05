@@ -17,11 +17,56 @@ var (
 )
 
 func Where[Q psql.Filterable]() struct {
-	Users userWhere[Q]
+	DefinitionVersionStats definitionVersionStatWhere[Q]
+	DefinitionVersions     definitionVersionWhere[Q]
+	Definitions            definitionWhere[Q]
+	MatchPlayerSessions    matchPlayerSessionWhere[Q]
+	MatchPlayers           matchPlayerWhere[Q]
+	Matches                matchWhere[Q]
+	PlayerGameStats        playerGameStatWhere[Q]
+	PlayerMinigameStats    playerMinigameStatWhere[Q]
+	Players                playerWhere[Q]
+	RoundPlayers           roundPlayerWhere[Q]
+	RoundTeams             roundTeamWhere[Q]
+	Rounds                 roundWhere[Q]
+	StatRecords            statRecordWhere[Q]
+	StatValues             statValueWhere[Q]
+	Stats                  statWhere[Q]
+	Users                  userWhere[Q]
 } {
 	return struct {
-		Users userWhere[Q]
+		DefinitionVersionStats definitionVersionStatWhere[Q]
+		DefinitionVersions     definitionVersionWhere[Q]
+		Definitions            definitionWhere[Q]
+		MatchPlayerSessions    matchPlayerSessionWhere[Q]
+		MatchPlayers           matchPlayerWhere[Q]
+		Matches                matchWhere[Q]
+		PlayerGameStats        playerGameStatWhere[Q]
+		PlayerMinigameStats    playerMinigameStatWhere[Q]
+		Players                playerWhere[Q]
+		RoundPlayers           roundPlayerWhere[Q]
+		RoundTeams             roundTeamWhere[Q]
+		Rounds                 roundWhere[Q]
+		StatRecords            statRecordWhere[Q]
+		StatValues             statValueWhere[Q]
+		Stats                  statWhere[Q]
+		Users                  userWhere[Q]
 	}{
-		Users: buildUserWhere[Q](Users.Columns),
+		DefinitionVersionStats: buildDefinitionVersionStatWhere[Q](DefinitionVersionStats.Columns),
+		DefinitionVersions:     buildDefinitionVersionWhere[Q](DefinitionVersions.Columns),
+		Definitions:            buildDefinitionWhere[Q](Definitions.Columns),
+		MatchPlayerSessions:    buildMatchPlayerSessionWhere[Q](MatchPlayerSessions.Columns),
+		MatchPlayers:           buildMatchPlayerWhere[Q](MatchPlayers.Columns),
+		Matches:                buildMatchWhere[Q](Matches.Columns),
+		PlayerGameStats:        buildPlayerGameStatWhere[Q](PlayerGameStats.Columns),
+		PlayerMinigameStats:    buildPlayerMinigameStatWhere[Q](PlayerMinigameStats.Columns),
+		Players:                buildPlayerWhere[Q](Players.Columns),
+		RoundPlayers:           buildRoundPlayerWhere[Q](RoundPlayers.Columns),
+		RoundTeams:             buildRoundTeamWhere[Q](RoundTeams.Columns),
+		Rounds:                 buildRoundWhere[Q](Rounds.Columns),
+		StatRecords:            buildStatRecordWhere[Q](StatRecords.Columns),
+		StatValues:             buildStatValueWhere[Q](StatValues.Columns),
+		Stats:                  buildStatWhere[Q](Stats.Columns),
+		Users:                  buildUserWhere[Q](Users.Columns),
 	}
 }

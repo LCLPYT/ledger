@@ -20,16 +20,52 @@ var (
 	InsertThenLoadCount = getThenLoadCount[*dialect.InsertQuery]()
 )
 
-type preloadCounts struct{}
-
-func getPreloadCount() preloadCounts {
-	return preloadCounts{}
+type preloadCounts struct {
+	DefinitionVersion definitionVersionCountPreloader
+	Definition        definitionCountPreloader
+	MatchPlayer       matchPlayerCountPreloader
+	Match             matchCountPreloader
+	Player            playerCountPreloader
+	RoundTeam         roundTeamCountPreloader
+	Round             roundCountPreloader
+	Stat              statCountPreloader
 }
 
-type thenLoadCounts[Q orm.Loadable] struct{}
+func getPreloadCount() preloadCounts {
+	return preloadCounts{
+		DefinitionVersion: buildDefinitionVersionCountPreloader(),
+		Definition:        buildDefinitionCountPreloader(),
+		MatchPlayer:       buildMatchPlayerCountPreloader(),
+		Match:             buildMatchCountPreloader(),
+		Player:            buildPlayerCountPreloader(),
+		RoundTeam:         buildRoundTeamCountPreloader(),
+		Round:             buildRoundCountPreloader(),
+		Stat:              buildStatCountPreloader(),
+	}
+}
+
+type thenLoadCounts[Q orm.Loadable] struct {
+	DefinitionVersion definitionVersionCountThenLoader[Q]
+	Definition        definitionCountThenLoader[Q]
+	MatchPlayer       matchPlayerCountThenLoader[Q]
+	Match             matchCountThenLoader[Q]
+	Player            playerCountThenLoader[Q]
+	RoundTeam         roundTeamCountThenLoader[Q]
+	Round             roundCountThenLoader[Q]
+	Stat              statCountThenLoader[Q]
+}
 
 func getThenLoadCount[Q orm.Loadable]() thenLoadCounts[Q] {
-	return thenLoadCounts[Q]{}
+	return thenLoadCounts[Q]{
+		DefinitionVersion: buildDefinitionVersionCountThenLoader[Q](),
+		Definition:        buildDefinitionCountThenLoader[Q](),
+		MatchPlayer:       buildMatchPlayerCountThenLoader[Q](),
+		Match:             buildMatchCountThenLoader[Q](),
+		Player:            buildPlayerCountThenLoader[Q](),
+		RoundTeam:         buildRoundTeamCountThenLoader[Q](),
+		Round:             buildRoundCountThenLoader[Q](),
+		Stat:              buildStatCountThenLoader[Q](),
+	}
 }
 
 func countThenLoadBuilder[Q orm.Loadable, T any](name string, f func(context.Context, bob.Executor, T, ...bob.Mod[*dialect.SelectQuery]) error) func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q] {

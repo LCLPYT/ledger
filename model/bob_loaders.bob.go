@@ -16,10 +16,42 @@ import (
 
 var Preload = getPreloaders()
 
-type preloaders struct{}
+type preloaders struct {
+	DefinitionVersionStat definitionVersionStatPreloader
+	DefinitionVersion     definitionVersionPreloader
+	Definition            definitionPreloader
+	MatchPlayerSession    matchPlayerSessionPreloader
+	MatchPlayer           matchPlayerPreloader
+	Match                 matchPreloader
+	PlayerGameStat        playerGameStatPreloader
+	PlayerMinigameStat    playerMinigameStatPreloader
+	Player                playerPreloader
+	RoundPlayer           roundPlayerPreloader
+	RoundTeam             roundTeamPreloader
+	Round                 roundPreloader
+	StatRecord            statRecordPreloader
+	StatValue             statValuePreloader
+	Stat                  statPreloader
+}
 
 func getPreloaders() preloaders {
-	return preloaders{}
+	return preloaders{
+		DefinitionVersionStat: buildDefinitionVersionStatPreloader(),
+		DefinitionVersion:     buildDefinitionVersionPreloader(),
+		Definition:            buildDefinitionPreloader(),
+		MatchPlayerSession:    buildMatchPlayerSessionPreloader(),
+		MatchPlayer:           buildMatchPlayerPreloader(),
+		Match:                 buildMatchPreloader(),
+		PlayerGameStat:        buildPlayerGameStatPreloader(),
+		PlayerMinigameStat:    buildPlayerMinigameStatPreloader(),
+		Player:                buildPlayerPreloader(),
+		RoundPlayer:           buildRoundPlayerPreloader(),
+		RoundTeam:             buildRoundTeamPreloader(),
+		Round:                 buildRoundPreloader(),
+		StatRecord:            buildStatRecordPreloader(),
+		StatValue:             buildStatValuePreloader(),
+		Stat:                  buildStatPreloader(),
+	}
 }
 
 var (
@@ -28,10 +60,42 @@ var (
 	UpdateThenLoad = getThenLoaders[*dialect.UpdateQuery]()
 )
 
-type thenLoaders[Q orm.Loadable] struct{}
+type thenLoaders[Q orm.Loadable] struct {
+	DefinitionVersionStat definitionVersionStatThenLoader[Q]
+	DefinitionVersion     definitionVersionThenLoader[Q]
+	Definition            definitionThenLoader[Q]
+	MatchPlayerSession    matchPlayerSessionThenLoader[Q]
+	MatchPlayer           matchPlayerThenLoader[Q]
+	Match                 matchThenLoader[Q]
+	PlayerGameStat        playerGameStatThenLoader[Q]
+	PlayerMinigameStat    playerMinigameStatThenLoader[Q]
+	Player                playerThenLoader[Q]
+	RoundPlayer           roundPlayerThenLoader[Q]
+	RoundTeam             roundTeamThenLoader[Q]
+	Round                 roundThenLoader[Q]
+	StatRecord            statRecordThenLoader[Q]
+	StatValue             statValueThenLoader[Q]
+	Stat                  statThenLoader[Q]
+}
 
 func getThenLoaders[Q orm.Loadable]() thenLoaders[Q] {
-	return thenLoaders[Q]{}
+	return thenLoaders[Q]{
+		DefinitionVersionStat: buildDefinitionVersionStatThenLoader[Q](),
+		DefinitionVersion:     buildDefinitionVersionThenLoader[Q](),
+		Definition:            buildDefinitionThenLoader[Q](),
+		MatchPlayerSession:    buildMatchPlayerSessionThenLoader[Q](),
+		MatchPlayer:           buildMatchPlayerThenLoader[Q](),
+		Match:                 buildMatchThenLoader[Q](),
+		PlayerGameStat:        buildPlayerGameStatThenLoader[Q](),
+		PlayerMinigameStat:    buildPlayerMinigameStatThenLoader[Q](),
+		Player:                buildPlayerThenLoader[Q](),
+		RoundPlayer:           buildRoundPlayerThenLoader[Q](),
+		RoundTeam:             buildRoundTeamThenLoader[Q](),
+		Round:                 buildRoundThenLoader[Q](),
+		StatRecord:            buildStatRecordThenLoader[Q](),
+		StatValue:             buildStatValueThenLoader[Q](),
+		Stat:                  buildStatThenLoader[Q](),
+	}
 }
 
 func thenLoadBuilder[Q orm.Loadable, T any](name string, f func(context.Context, bob.Executor, T, ...bob.Mod[*dialect.SelectQuery]) error) func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q] {

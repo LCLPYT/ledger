@@ -29,7 +29,23 @@ func (j joinSet[Q]) AliasedAs(alias string) joinSet[Q] {
 	}
 }
 
-type joins[Q dialect.Joinable] struct{}
+type joins[Q dialect.Joinable] struct {
+	DefinitionVersionStats joinSet[definitionVersionStatJoins[Q]]
+	DefinitionVersions     joinSet[definitionVersionJoins[Q]]
+	Definitions            joinSet[definitionJoins[Q]]
+	MatchPlayerSessions    joinSet[matchPlayerSessionJoins[Q]]
+	MatchPlayers           joinSet[matchPlayerJoins[Q]]
+	Matches                joinSet[matchJoins[Q]]
+	PlayerGameStats        joinSet[playerGameStatJoins[Q]]
+	PlayerMinigameStats    joinSet[playerMinigameStatJoins[Q]]
+	Players                joinSet[playerJoins[Q]]
+	RoundPlayers           joinSet[roundPlayerJoins[Q]]
+	RoundTeams             joinSet[roundTeamJoins[Q]]
+	Rounds                 joinSet[roundJoins[Q]]
+	StatRecords            joinSet[statRecordJoins[Q]]
+	StatValues             joinSet[statValueJoins[Q]]
+	Stats                  joinSet[statJoins[Q]]
+}
 
 func buildJoinSet[Q interface{ aliasedAs(string) Q }, C any, F func(C, string) Q](c C, f F) joinSet[Q] {
 	return joinSet[Q]{
@@ -40,7 +56,23 @@ func buildJoinSet[Q interface{ aliasedAs(string) Q }, C any, F func(C, string) Q
 }
 
 func getJoins[Q dialect.Joinable]() joins[Q] {
-	return joins[Q]{}
+	return joins[Q]{
+		DefinitionVersionStats: buildJoinSet[definitionVersionStatJoins[Q]](DefinitionVersionStats.Columns, buildDefinitionVersionStatJoins),
+		DefinitionVersions:     buildJoinSet[definitionVersionJoins[Q]](DefinitionVersions.Columns, buildDefinitionVersionJoins),
+		Definitions:            buildJoinSet[definitionJoins[Q]](Definitions.Columns, buildDefinitionJoins),
+		MatchPlayerSessions:    buildJoinSet[matchPlayerSessionJoins[Q]](MatchPlayerSessions.Columns, buildMatchPlayerSessionJoins),
+		MatchPlayers:           buildJoinSet[matchPlayerJoins[Q]](MatchPlayers.Columns, buildMatchPlayerJoins),
+		Matches:                buildJoinSet[matchJoins[Q]](Matches.Columns, buildMatchJoins),
+		PlayerGameStats:        buildJoinSet[playerGameStatJoins[Q]](PlayerGameStats.Columns, buildPlayerGameStatJoins),
+		PlayerMinigameStats:    buildJoinSet[playerMinigameStatJoins[Q]](PlayerMinigameStats.Columns, buildPlayerMinigameStatJoins),
+		Players:                buildJoinSet[playerJoins[Q]](Players.Columns, buildPlayerJoins),
+		RoundPlayers:           buildJoinSet[roundPlayerJoins[Q]](RoundPlayers.Columns, buildRoundPlayerJoins),
+		RoundTeams:             buildJoinSet[roundTeamJoins[Q]](RoundTeams.Columns, buildRoundTeamJoins),
+		Rounds:                 buildJoinSet[roundJoins[Q]](Rounds.Columns, buildRoundJoins),
+		StatRecords:            buildJoinSet[statRecordJoins[Q]](StatRecords.Columns, buildStatRecordJoins),
+		StatValues:             buildJoinSet[statValueJoins[Q]](StatValues.Columns, buildStatValueJoins),
+		Stats:                  buildJoinSet[statJoins[Q]](Stats.Columns, buildStatJoins),
+	}
 }
 
 type modAs[Q any, C interface{ AliasedAs(string) C }] struct {
