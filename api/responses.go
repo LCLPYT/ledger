@@ -17,6 +17,7 @@ type Response struct {
 type ErrorInfo struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`
+	Details any    `json:"details,omitempty"`
 }
 
 type Meta struct {
@@ -34,10 +35,47 @@ func OK(c *gin.Context, data any) {
 	})
 }
 
+// Created sends a success response for a newly created resource.
+func Created(c *gin.Context, data any) {
+	c.JSON(http.StatusCreated, Response{
+		Success: true,
+		Data:    data,
+	})
+}
+
+// Page sends a success response alongside pagination metadata.
+func Page(c *gin.Context, data any, page, perPage, total int) {
+	totalPages := 0
+
+	if perPage > 0 {
+		totalPages = (total + perPage - 1) / perPage
+	}
+
+	c.JSON(http.StatusOK, Response{
+		Success: true,
+		Data:    data,
+		Meta: &Meta{
+			Page:       page,
+			PerPage:    perPage,
+			Total:      total,
+			TotalPages: totalPages,
+		},
+	})
+}
+
 func Fail(c *gin.Context, status int, code, message string) {
 	c.JSON(status, Response{
 		Success: false,
 		Error:   &ErrorInfo{Code: code, Message: message},
+	})
+}
+
+// FailWithDetails sends an error response carrying a machine readable list of
+// reasons, used for schema validation failures.
+func FailWithDetails(c *gin.Context, status int, code, message string, details any) {
+	c.JSON(status, Response{
+		Success: false,
+		Error:   &ErrorInfo{Code: code, Message: message, Details: details},
 	})
 }
 

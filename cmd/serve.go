@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"ledger/api"
 	"ledger/config"
+	"ledger/db"
 	"log"
 	"net/http"
 	"os"
@@ -61,6 +62,14 @@ func setupServeConfig(cmd *cobra.Command) (*viper.Viper, error) {
 }
 
 func serve(v *viper.Viper) error {
+	database, err := db.ConnectDatabase(v)
+
+	if err != nil {
+		return err
+	}
+
+	defer database.Close()
+
 	router := gin.New()
 	router.Use(gin.Logger(), api.Recovery())
 
@@ -69,7 +78,7 @@ func serve(v *viper.Viper) error {
 		return fmt.Errorf("SetTrustedProxies: %w", err)
 	}
 
-	api.SetupRoutes(router)
+	api.SetupRoutes(router, database)
 
 	addr := fmt.Sprintf("%s:%d", v.GetString("host"), v.GetInt("port"))
 
