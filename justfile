@@ -24,6 +24,12 @@ rollback: db
 status: db
     go run . db status
 
+test_db:
+    [ "$(docker compose ps postgres_test --format '{{ health_fmt }}')" = "healthy" ] || docker compose up postgres_test -d --wait
+
+test: test_db
+    DATABASE_PORT=5433 go test ./...
+
 generate: migrate
     PSQL_DSN="$(go run . db dsn)" go run github.com/stephenafamo/bob/gen/bobgen-psql@v0.50.0 -c bobgen.yaml
     go build ./...
