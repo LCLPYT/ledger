@@ -1,11 +1,17 @@
 package wiring
 
 import (
+	apiv1 "ledger/internal/api/v1"
 	"ledger/internal/bob"
 	"ledger/internal/db/migrations"
 
 	"github.com/quadrubo/golib/app"
 	"github.com/quadrubo/golib/config"
+	"github.com/quadrubo/golib/grpcerr"
+	"github.com/quadrubo/golib/grpcinterceptor/errmap"
+	"github.com/quadrubo/golib/grpcinterceptor/recovery"
+	"github.com/quadrubo/golib/grpcinterceptor/validate"
+	"github.com/quadrubo/golib/grpcserver"
 	"github.com/quadrubo/golib/logging"
 	"github.com/quadrubo/golib/migrate"
 	"github.com/quadrubo/golib/postgres"
@@ -37,5 +43,15 @@ func Migrate(conf app.Module) []app.Module {
 }
 
 func Serve(conf app.Module) []app.Module {
-	return Migrate(conf)
+	return append(
+		Migrate(conf),
+		grpcerr.Module(),
+		validate.Module(),
+		grpcserver.Module(grpcserver.WithUnaryInterceptors(
+			recovery.Unary,
+			errmap.Unary,
+			validate.Unary,
+		)),
+		apiv1.Module(),
+	)
 }

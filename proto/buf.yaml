@@ -1,0 +1,17 @@
+version: v2
+modules:
+  - path: .
+deps:
+  - buf.build/googleapis/googleapis
+  - buf.build/bufbuild/protovalidate
+lint:
+  use:
+    - STANDARD
+  except:
+    # Allows us to reuse the same message for request and response.
+    - RPC_REQUEST_RESPONSE_UNIQUE
+    # Allows us to name responses according to the resource, not the RPC.
+    - RPC_RESPONSE_STANDARD_NAME
+breaking:
+  use:
+    - FILE

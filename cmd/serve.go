@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/quadrubo/golib/app"
 	"github.com/quadrubo/golib/logging"
 	"github.com/samber/do/v2"
 	"github.com/spf13/cobra"
@@ -20,32 +21,17 @@ var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the ledger HTTP server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		host, err := cmd.Flags().GetString("host")
+		ctx := cmd.Context()
+		a, err := app.New(ctx, wiring.Serve(wiring.Config()))
 		if err != nil {
-			return err
+			return fmt.Errorf("cmd: error initializing application: %w", err)
 		}
 
-		port, err := cmd.Flags().GetInt("port")
-		if err != nil {
-			return err
-		}
-
-		addr := fmt.Sprintf("%s:%d", host, port)
-
-		return withApp(
-			cmd.Context(),
-			wiring.Serve(wiring.Config()),
-			func(ctx context.Context, i do.Injector) error {
-				return serve(ctx, i, addr)
-			},
-		)
+		return a.Run(ctx)
 	},
 }
 
 func init() {
-	serveCmd.Flags().Int("port", 8080, "port to listen on")
-	serveCmd.Flags().String("host", "localhost", "host to listen on")
-
 	rootCmd.AddCommand(serveCmd)
 }
 
