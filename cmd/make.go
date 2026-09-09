@@ -7,12 +7,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	model2 "ledger/internal/model"
-	"ledger/internal/util"
-	"ledger/internal/wiring"
 	"net/mail"
 	"os"
 	"strings"
+
+	model2 "github.com/lclpyt/ledger/internal/model"
+	"github.com/lclpyt/ledger/internal/util"
+	"github.com/lclpyt/ledger/internal/wiring"
 
 	"github.com/aarondl/opt/omit"
 	"github.com/samber/do/v2"

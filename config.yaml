@@ -2,5 +2,8 @@ modules:
   grpcerr:
     domain: ledger.localhost
 
+  grpcserver:
+    addr: "127.0.0.1:9000"
+
   postgres:
     url: postgres://db:db@127.0.0.1:5432/db?sslmode=disable

@@ -1,4 +1,4 @@
-module ledger
+module github.com/lclpyt/ledger
 
 go 1.26.5
 

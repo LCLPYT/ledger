@@ -4,11 +4,12 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	api2 "ledger/internal/api"
-	"ledger/internal/wiring"
 	"log/slog"
 	"net/http"
 	"time"
+
+	api2 "github.com/lclpyt/ledger/internal/api"
+	"github.com/lclpyt/ledger/internal/wiring"
 
 	"github.com/gin-gonic/gin"
 	"github.com/quadrubo/golib/app"

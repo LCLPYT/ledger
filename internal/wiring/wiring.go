@@ -1,9 +1,9 @@
 package wiring
 
 import (
-	apiv1 "ledger/internal/api/v1"
-	"ledger/internal/bob"
-	"ledger/internal/db/migrations"
+	apiv1 "github.com/lclpyt/ledger/internal/api/v1"
+	"github.com/lclpyt/ledger/internal/bob"
+	"github.com/lclpyt/ledger/internal/db/migrations"
 
 	"github.com/quadrubo/golib/app"
 	"github.com/quadrubo/golib/config"

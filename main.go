@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
-	"ledger/cmd"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+
+	"github.com/lclpyt/ledger/cmd"
 )
 
 func main() {

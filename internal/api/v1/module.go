@@ -3,7 +3,8 @@ package v1
 import (
 	"context"
 	"fmt"
-	ledgerv1 "ledger/gen/go/apis/ledger/v1"
+
+	ledgerv1 "github.com/lclpyt/ledger/gen/go/apis/ledger/v1"
 
 	"github.com/quadrubo/golib/app"
 	"github.com/samber/do/v2"
