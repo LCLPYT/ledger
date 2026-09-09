@@ -4,31 +4,41 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"ledger/api"
-	"ledger/config"
-	"log"
+	api2 "ledger/internal/api"
+	"ledger/internal/wiring"
+	"log/slog"
 	"net/http"
-	"os"
-	"os/signal"
-	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/quadrubo/golib/logging"
+	"github.com/samber/do/v2"
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper"
 )
 
 var serveCmd = &cobra.Command{
 	Use:   "serve",
 	Short: "Start the ledger HTTP server",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		v, err := setupServeConfig(cmd)
-
+		host, err := cmd.Flags().GetString("host")
 		if err != nil {
 			return err
 		}
 
-		return serve(v)
+		port, err := cmd.Flags().GetInt("port")
+		if err != nil {
+			return err
+		}
+
+		addr := fmt.Sprintf("%s:%d", host, port)
+
+		return withApp(
+			cmd.Context(),
+			wiring.Serve(wiring.Config()),
+			func(ctx context.Context, i do.Injector) error {
+				return serve(ctx, i, addr)
+			},
+		)
 	},
 }
 
@@ -39,39 +49,20 @@ func init() {
 	rootCmd.AddCommand(serveCmd)
 }
 
-func setupServeConfig(cmd *cobra.Command) (*viper.Viper, error) {
-	v, err := config.CreateCommonConfig()
+func serve(ctx context.Context, i do.Injector, addr string) error {
+	log, err := logging.Component(i, "http")
 	if err != nil {
-		return nil, err
+		return err
 	}
 
-	v.SetDefault("host", "localhost")
-	v.SetDefault("port", 8080)
-	v.SetDefault("trusted_proxies", []string{})
-
-	if err := v.BindPFlag("port", cmd.Flags().Lookup("port")); err != nil {
-		return nil, err
-	}
-
-	if err := v.BindPFlag("host", cmd.Flags().Lookup("host")); err != nil {
-		return nil, err
-	}
-
-	return v, nil
-}
-
-func serve(v *viper.Viper) error {
 	router := gin.New()
-	router.Use(gin.Logger(), api.Recovery())
+	router.Use(gin.Logger(), api2.Recovery())
 
-	trustedProxies := v.GetStringSlice("trusted_proxies")
-	if err := router.SetTrustedProxies(trustedProxies); err != nil {
+	if err := router.SetTrustedProxies(nil); err != nil {
 		return fmt.Errorf("SetTrustedProxies: %w", err)
 	}
 
-	api.SetupRoutes(router)
-
-	addr := fmt.Sprintf("%s:%d", v.GetString("host"), v.GetInt("port"))
+	api2.SetupRoutes(router)
 
 	s := &http.Server{
 		Addr:           addr,
@@ -81,31 +72,33 @@ func serve(v *viper.Viper) error {
 		MaxHeaderBytes: 1 << 20,
 	}
 
-	go func() {
-		err := s.ListenAndServe()
+	listenErr := make(chan error, 1)
 
-		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			log.Fatalf("listen: %s\n", err)
+	go func() {
+		log.Info("listening", slog.String("addr", addr))
+
+		if err := s.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			listenErr <- err
+			return
 		}
+
+		listenErr <- nil
 	}()
 
-	quit := make(chan os.Signal, 1)
-
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-
-	<-quit
-
-	log.Println("Shutdown Server ...")
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-
-	defer cancel()
-
-	if err := s.Shutdown(ctx); err != nil {
-		log.Println("Server Shutdown:", err)
+	select {
+	case err := <-listenErr:
+		return err
+	case <-ctx.Done():
 	}
 
-	log.Println("Server exiting")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+
+	if err := s.Shutdown(shutdownCtx); err != nil {
+		return fmt.Errorf("shutdown: %w", err)
+	}
+
+	log.Info("stopped")
 
 	return nil
 }
