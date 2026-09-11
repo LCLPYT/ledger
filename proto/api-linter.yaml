@@ -1,0 +1,10 @@
+- included_paths: ['**/*.proto']
+  disabled_rules:
+    # The Java codegen options are irrelevant for this Go repo.
+    - 'core::0191::java-package'
+    - 'core::0191::java-multiple-files'
+    - 'core::0191::java-outer-classname'
+
+- included_paths: ['apis/ledger/v1/rules.proto']
+  disabled_rules:
+    - 'core::0191::proto-version'

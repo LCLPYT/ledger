@@ -1,0 +1,163 @@
+syntax = "proto3";
+
+package apis.ledger.v1;
+
+import "apis/ledger/v1/rules.proto";
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/api/resource.proto";
+import "google/protobuf/empty.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1";
+
+service GameService {
+  rpc GetGame(GetGameRequest) returns (Game) {
+    option (google.api.http) = {
+      get: "/v1/games/*"
+    };
+    option (google.api.method_signature) = "name";
+  }
+
+  rpc ListGames(ListGamesRequest) returns (ListGamesResponse) {
+    option (google.api.http) = {
+      get: '/v1/books'
+    };
+  }
+
+  rpc CreateGame(CreateGameRequest) returns (Game) {
+    option (google.api.http) = {
+      post: "/v1/games"
+      body: "game"
+    };
+    option (google.api.method_signature) = "game";
+  }
+
+  rpc UpdateGame(UpdateGameRequest) returns (Game) {
+    option (google.api.http) = {
+      patch: "/v1/games/*",
+      body: "game"
+    };
+    option (google.api.method_signature) = "game,update_mask";
+  }
+
+  rpc DeleteGame(DeleteGameRequest) returns (google.protobuf.Empty) {
+    option (google.api.http) = {
+      delete: "/v1/games/*"
+    };
+    option (google.api.method_signature) = "name";
+  }
+}
+
+message GetGameRequest {
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {
+      type: "ledger.lclpnet.work/Game"
+    }
+  ];
+}
+
+message ListGamesRequest {
+  // Maximum number of games to return. Fewer games may be returned.
+  // If unspecified, 50 games will be returned.
+  // Maximum value is 1000 and higher values will be clamped.
+  int32 page_size = 1 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).int32.gte = 0
+  ];
+
+  // Page token received from the previous list call.
+  // If provided, the subsequent page will be returned.
+  string page_token = 2 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).string.max_len = 4096
+  ];
+}
+
+message ListGamesResponse {
+  repeated Game games = 1;
+
+  // Token that can be used in the next list request in order to retrieve the next page.
+  string next_page_token = 2;
+}
+
+message CreateGameRequest {
+  Game game = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).required = true
+  ];
+}
+
+message UpdateGameRequest {
+  Game game = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).ignore = IGNORE_ALWAYS
+  ];
+
+  google.protobuf.FieldMask update_mask = 2 [
+    (google.api.field_behavior) = OPTIONAL
+  ];
+}
+
+message DeleteGameRequest {
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {
+      type: "ledger.lclpnet.work/Game"
+    }
+  ];
+}
+
+message Game {
+  option (google.api.resource) = {
+    type: "ledger.lclpnet.work/Game"
+    pattern: "games/{game}"
+    singular: "game"
+    plural: "games"
+  };
+
+  enum Type {
+    TYPE_UNSPECIFIED = 0;
+    TYPE_GAME = 1;
+    TYPE_MINIGAME = 2;
+  }
+
+  string name = 1 [
+    (google.api.field_behavior) = IDENTIFIER,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.(resource_name) = "games/*"
+  ];
+
+  Type type = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).enum = {
+      defined_only: true
+      not_in: 0
+    }
+  ];
+
+  // names of the game in different locales as flat dict. Locale identifiers are BCP 47 language tags.
+  map<string, string> name_translations = 3 [
+    (buf.validate.field).map = {
+      keys: {
+        string: {
+          // Matches standard BCP 47 language tags (e.g., "en", "en-US", "zh-Hans-CN")
+          pattern: "^[a-zA-Z]{2,3}(-[a-zA-Z]{4})?(-[a-zA-Z]{2}|-[0-9]{3})?$"
+        }
+      }
+    },
+    (buf.validate.field).cel = {
+      id: "game.name_translations.has_en",
+      message: "name_translations map must contain a non-empty 'en' key",
+      expression: "'en' in this && this['en'].size() > 0"
+    }
+  ];
+
+  google.protobuf.Timestamp create_time = 100 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  google.protobuf.Timestamp update_time = 101 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
