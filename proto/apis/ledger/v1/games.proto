@@ -14,7 +14,10 @@ import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1";
 
-service GameService {
+// GamesService manages all registeried games.
+service GamesService {
+
+  // Get game info.
   rpc GetGame(GetGameRequest) returns (Game) {
     option (google.api.http) = {
       get: "/v1/games/*"
@@ -22,12 +25,14 @@ service GameService {
     option (google.api.method_signature) = "name";
   }
 
+  // List registered games.
   rpc ListGames(ListGamesRequest) returns (ListGamesResponse) {
     option (google.api.http) = {
-      get: '/v1/books'
+      get: "/v1/games"
     };
   }
 
+  // Create a new game from a unique game id.
   rpc CreateGame(CreateGameRequest) returns (Game) {
     option (google.api.http) = {
       post: "/v1/games"
@@ -36,6 +41,7 @@ service GameService {
     option (google.api.method_signature) = "game";
   }
 
+  // Update game info of a game identified by the given id.
   rpc UpdateGame(UpdateGameRequest) returns (Game) {
     option (google.api.http) = {
       patch: "/v1/games/*",
@@ -44,6 +50,7 @@ service GameService {
     option (google.api.method_signature) = "game,update_mask";
   }
 
+  // Delete a game.
   rpc DeleteGame(DeleteGameRequest) returns (google.protobuf.Empty) {
     option (google.api.http) = {
       delete: "/v1/games/*"
@@ -52,7 +59,9 @@ service GameService {
   }
 }
 
+// Request message for get game info.
 message GetGameRequest {
+  // The resource name of the game to get.
   string name = 1 [
     (google.api.field_behavior) = REQUIRED,
     (google.api.resource_reference) = {
@@ -61,6 +70,7 @@ message GetGameRequest {
   ];
 }
 
+// Request message for the list games api.
 message ListGamesRequest {
   // Maximum number of games to return. Fewer games may be returned.
   // If unspecified, 50 games will be returned.
@@ -78,32 +88,41 @@ message ListGamesRequest {
   ];
 }
 
+// Response message of list games request.
 message ListGamesResponse {
+  // The page of games.
   repeated Game games = 1;
 
   // Token that can be used in the next list request in order to retrieve the next page.
   string next_page_token = 2;
 }
 
+// Request message to create / register a new game.
 message CreateGameRequest {
+  // Game info
   Game game = 1 [
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).required = true
   ];
 }
 
+// Request message to update game info.
 message UpdateGameRequest {
+  // Game info to update.
   Game game = 1 [
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).ignore = IGNORE_ALWAYS
   ];
 
+  // Fields to update. Omit to update all writable fields.
   google.protobuf.FieldMask update_mask = 2 [
     (google.api.field_behavior) = OPTIONAL
   ];
 }
 
+// Request message to delete a game.
 message DeleteGameRequest {
+  // Resource name of the game to delete.
   string name = 1 [
     (google.api.field_behavior) = REQUIRED,
     (google.api.resource_reference) = {
@@ -112,6 +131,8 @@ message DeleteGameRequest {
   ];
 }
 
+// Generic game info including unique id and translated names.
+// Games may have different types, such as minigames which are played as parts of "bigger" games.
 message Game {
   option (google.api.resource) = {
     type: "ledger.lclpnet.work/Game"
@@ -126,12 +147,17 @@ message Game {
     TYPE_MINIGAME = 2;
   }
 
+  // Resource name of the game.
   string name = 1 [
     (google.api.field_behavior) = IDENTIFIER,
     (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
     (buf.validate.field).string.(resource_name) = "games/*"
   ];
 
+  // Type of the game.
+  // "game" games are the root-level game type.
+  // "minigame" is a subtype of game that may be played as part of a root-level "game".
+  // Minigames are deliberately not statically linked to root-level games, as some minigames may occur in different kinds of games.
   Type type = 2 [
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).enum = {
@@ -157,7 +183,9 @@ message Game {
     }
   ];
 
+  // Time when the game was registered.
   google.protobuf.Timestamp create_time = 100 [(google.api.field_behavior) = OUTPUT_ONLY];
 
+  // TIme when the game was last updated.
   google.protobuf.Timestamp update_time = 101 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
