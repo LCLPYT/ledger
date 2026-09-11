@@ -12,3 +12,4 @@ CREATE TABLE games (
 -- +goose Down
 
 DROP TABLE games;
+DROP TYPE game_type;
