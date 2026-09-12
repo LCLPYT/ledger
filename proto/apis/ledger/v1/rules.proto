@@ -13,8 +13,8 @@ extend buf.validate.StringRules {
   string resource_name = 1000 [(buf.validate.predefined).cel = {
     id: "string.resource_name"
     expression:
-        "this.matches('^' + rule.replace('*', '[a-z0-9-]{1,63}') + '$')"
-            "  ? ''"
-            "  : 'must be a valid ' + rule + ' resource name'"
+      "this.matches('^' + rule.replace('*', '[a-z0-9-]{1,63}') + '$')"
+      "  ? ''"
+      "  : 'must be a valid ' + rule + ' resource name'"
   }];
 }
