@@ -15,6 +15,12 @@ buf-gen:
 db:
     docker compose up -d --wait postgres
 
+stop-db:
+    docker compose down postgres
+
+reset-db: stop-db
+    docker volume rm ledger_pgdata
+
 fmt: fmt-go fmt-proto
 
 fmt-go:
