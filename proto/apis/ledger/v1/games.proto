@@ -8,13 +8,12 @@ import "google/api/annotations.proto";
 import "google/api/client.proto";
 import "google/api/field_behavior.proto";
 import "google/api/resource.proto";
-import "google/protobuf/empty.proto";
 import "google/protobuf/field_mask.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1";
 
-// GamesService manages all registeried games.
+// GamesService manages all registered games.
 service GamesService {
   // Get game info.
   rpc GetGame(GetGameRequest) returns (Game) {
@@ -45,10 +44,18 @@ service GamesService {
     option (google.api.method_signature) = "game,update_mask";
   }
 
-  // Delete a game.
-  rpc DeleteGame(DeleteGameRequest) returns (google.protobuf.Empty) {
+  // Soft delete a game. The game can be restored with UndeleteGame.
+  rpc DeleteGame(DeleteGameRequest) returns (Game) {
     option (google.api.http) = {delete: "/v1/{name=games/*}"};
     option (google.api.method_signature) = "name";
+  }
+
+  // Restore a soft deleted game.
+  rpc UndeleteGame(UndeleteGameRequest) returns (Game) {
+    option (google.api.http) = {
+      post: "/v1/{name=games/*}:undelete"
+      body: "*"
+    };
   }
 }
 
@@ -77,6 +84,9 @@ message ListGamesRequest {
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).string.max_len = 4096
   ];
+
+  // If true, soft deleted games are included in the response.
+  bool show_deleted = 3 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // Response message of list games request.
@@ -90,16 +100,18 @@ message ListGamesResponse {
 
 // Request message to create / register a new game.
 message CreateGameRequest {
-  // Game info
+  // The game to create.
   Game game = 1 [
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).required = true
   ];
 
   // Unique id of the game, used as the last segment of its resource name.
+  // Must start with a letter, end with a letter or digit and contain only
+  // lowercase letters, digits and hyphens (AIP-122).
   string game_id = 2 [
     (google.api.field_behavior) = REQUIRED,
-    (buf.validate.field).string.pattern = "^[a-z0-9/._-]{1,63}$"
+    (buf.validate.field).string.pattern = "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
   ];
 }
 
@@ -124,6 +136,15 @@ message UpdateGameRequest {
 // Request message to delete a game.
 message DeleteGameRequest {
   // Resource name of the game to delete.
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "ledger.lclpnet.work/Game"}
+  ];
+}
+
+// Request message to restore a soft deleted game.
+message UndeleteGameRequest {
+  // Resource name of the game to restore.
   string name = 1 [
     (google.api.field_behavior) = REQUIRED,
     (google.api.resource_reference) = {type: "ledger.lclpnet.work/Game"}
@@ -163,23 +184,23 @@ message Game {
   // "game" games are the root-level game type.
   // "minigame" is a subtype of game that may be played as part of a root-level "game".
   // Minigames are deliberately not statically linked to root-level games, as some minigames may occur in different kinds of games.
+  // Cannot be changed after creation.
   Type type = 2 [
     (google.api.field_behavior) = REQUIRED,
+    (google.api.field_behavior) = IMMUTABLE,
     (buf.validate.field).enum = {
       defined_only: true
       not_in: 0
     }
   ];
 
-  // names of the game in different locales as flat dict. Locale identifiers are BCP 47 language tags.
+  // Names of the game in different locales as a flat map.
+  // Keys are lowercase BCP 47 language tags, e.g. "en", "en-us", "zh-hans-cn".
   map<string, string> name_translations = 3 [
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).map = {
       keys: {
-        string: {
-          // Matches standard BCP 47 language tags (e.g., "en", "en-US", "zh-Hans-CN")
-          pattern: "^[a-zA-Z]{2,3}(-[a-zA-Z]{4})?(-[a-zA-Z]{2}|-[0-9]{3})?$"
-        }
+        string: {pattern: "^[a-z]{2,3}(-[a-z]{4})?(-[a-z]{2}|-[0-9]{3})?$"}
       }
     },
     (buf.validate.field).cel = {
@@ -192,6 +213,12 @@ message Game {
   // Time when the game was registered.
   google.protobuf.Timestamp create_time = 100 [(google.api.field_behavior) = OUTPUT_ONLY];
 
-  // TIme when the game was last updated.
+  // Time when the game was last updated.
   google.protobuf.Timestamp update_time = 101 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Time when the game was soft deleted. Unset if the game is not deleted.
+  google.protobuf.Timestamp delete_time = 102 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Time after which a soft deleted game is permanently deleted. Unset if the game is not deleted.
+  google.protobuf.Timestamp purge_time = 103 [(google.api.field_behavior) = OUTPUT_ONLY];
 }
