@@ -44,7 +44,7 @@ func readLine(reader *bufio.Reader, prompt string) (string, error) {
 
 	line, err := reader.ReadString('\n')
 
-	if err != nil && !(errors.Is(err, io.EOF) && line != "") {
+	if err != nil && (!errors.Is(err, io.EOF) || line == "") {
 		return "", err
 	}
 
@@ -70,7 +70,7 @@ func readSecret(reader *bufio.Reader, prompt string) ([]byte, error) {
 	line, err := reader.ReadString('\n')
 	fmt.Println()
 
-	if err != nil && !(errors.Is(err, io.EOF) && line != "") {
+	if err != nil && (!errors.Is(err, io.EOF) || line == "") {
 		return nil, err
 	}
 
