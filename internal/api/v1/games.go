@@ -1,0 +1,149 @@
+package v1
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"strconv"
+
+	"github.com/aarondl/opt/omit"
+	ledgerv1 "github.com/lclpyt/ledger/gen/go/apis/ledger/v1"
+	"github.com/lclpyt/ledger/internal/games"
+	"github.com/lclpyt/ledger/internal/model"
+	"github.com/lclpyt/ledger/internal/model/enums"
+	"github.com/quadrubo/golib/apperr"
+	"github.com/quadrubo/golib/protoconv"
+	"github.com/stephenafamo/bob/types"
+)
+
+func newGamesApi(gamesService *games.Service) *gamesApi {
+	return &gamesApi{
+		gamesService: gamesService,
+	}
+}
+
+type gamesApi struct {
+	ledgerv1.UnimplementedGamesServiceServer
+
+	gamesService *games.Service
+}
+
+func (g *gamesApi) GetGame(ctx context.Context, request *ledgerv1.GetGameRequest) (*ledgerv1.Game, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g *gamesApi) ListGames(ctx context.Context, request *ledgerv1.ListGamesRequest) (*ledgerv1.ListGamesResponse, error) {
+	order, err := games.Paging.ParseOrderBy("create_time")
+
+	if err != nil {
+		return nil, fmt.Errorf("games: failed to parse order: %w", err)
+	}
+
+	scope := []string{strconv.FormatBool(request.GetShowDeleted())}
+
+	page, err := order.Page(int(request.GetPageSize()), request.GetPageToken(), scope)
+
+	if err != nil {
+		return nil, apperr.InvalidPageToken(err, request.GetPageToken())
+	}
+
+	filters := games.Filters{
+		ShowDeleted: request.GetShowDeleted(),
+	}
+
+	gameModels, nextPageToken, err := g.gamesService.List(ctx, page, filters)
+
+	if err != nil {
+		return nil, fmt.Errorf("games: failed to list games: %w", err)
+	}
+
+	gameList := make([]*ledgerv1.Game, 0, len(gameModels))
+
+	for _, row := range gameModels {
+		game, err := gameToProto(row)
+
+		if err != nil {
+			return nil, err
+		}
+
+		gameList = append(gameList, game)
+	}
+
+	return &ledgerv1.ListGamesResponse{
+		Games:         gameList,
+		NextPageToken: nextPageToken,
+	}, nil
+}
+
+func (g *gamesApi) CreateGame(ctx context.Context, request *ledgerv1.CreateGameRequest) (*ledgerv1.Game, error) {
+	translations, err := json.Marshal(request.GetGame().GetNameTranslations())
+
+	if err != nil {
+		return nil, fmt.Errorf("games: failed to encode name translations: %w", err)
+	}
+
+	game, err := g.gamesService.Create(ctx, &model.GameSetter{
+		ID:               omit.From(request.GetGameId()),
+		Type:             omit.From(gameTypeFromProto(request.GetGame().GetType())),
+		NameTranslations: omit.From(types.NewJSON(json.RawMessage(translations))),
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("games: failed to create game: %w", err)
+	}
+
+	return gameToProto(game)
+}
+
+func (g *gamesApi) UpdateGame(ctx context.Context, request *ledgerv1.UpdateGameRequest) (*ledgerv1.Game, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g *gamesApi) DeleteGame(ctx context.Context, request *ledgerv1.DeleteGameRequest) (*ledgerv1.Game, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (g *gamesApi) UndeleteGame(ctx context.Context, request *ledgerv1.UndeleteGameRequest) (*ledgerv1.Game, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
+func gameToProto(row *model.Game) (*ledgerv1.Game, error) {
+	var translations map[string]string
+	if err := json.Unmarshal(row.NameTranslations.Val, &translations); err != nil {
+		return nil, fmt.Errorf("games: failed to decode name translations of %q: %w", row.ID, err)
+	}
+
+	return &ledgerv1.Game{
+		Name:             games.Pattern.Format(row.ID),
+		Type:             gameTypeToProto(row.Type),
+		NameTranslations: translations,
+		CreateTime:       protoconv.TimeToProto(row.CreateTime),
+		UpdateTime:       protoconv.TimeToProto(row.UpdateTime),
+		DeleteTime:       protoconv.TimeToProto(row.DeleteTime.GetOrZero()),
+		PurgeTime:        protoconv.TimeToProto(row.PurgeTime.GetOrZero()),
+	}, nil
+}
+
+func gameTypeToProto(t enums.GameType) ledgerv1.Game_Type {
+	switch t {
+	case enums.GameTypeGame:
+		return ledgerv1.Game_TYPE_GAME
+	case enums.GameTypeMinigame:
+		return ledgerv1.Game_TYPE_MINIGAME
+	default:
+		return ledgerv1.Game_TYPE_UNSPECIFIED
+	}
+}
+
+func gameTypeFromProto(t ledgerv1.Game_Type) enums.GameType {
+	switch t {
+	case ledgerv1.Game_TYPE_MINIGAME:
+		return enums.GameTypeMinigame
+	default:
+		return enums.GameTypeGame
+	}
+}

@@ -26,9 +26,9 @@ type User struct {
 	ID           int64               `db:"id,pk" `
 	Name         string              `db:"name" `
 	Email        string              `db:"email" `
-	CreatedAt    time.Time           `db:"created_at" `
-	UpdatedAt    time.Time           `db:"updated_at" `
-	DeletedAt    null.Val[time.Time] `db:"deleted_at" `
+	CreateTime   time.Time           `db:"create_time" `
+	UpdateTime   time.Time           `db:"update_time" `
+	DeleteTime   null.Val[time.Time] `db:"delete_time" `
 	PasswordHash []byte              `db:"password_hash" `
 }
 
@@ -44,7 +44,7 @@ type UsersQuery = *psql.ViewQuery[*User, UserSlice]
 
 func buildUserColumns(tableName string) userColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "name", "email", "created_at", "updated_at", "deleted_at", "password_hash",
+		"id", "name", "email", "create_time", "update_time", "delete_time", "password_hash",
 	)
 
 	if tableName != "" {
@@ -57,9 +57,9 @@ func buildUserColumns(tableName string) userColumns {
 		ID:           buildUserColumn(tableName, "id"),
 		Name:         buildUserColumn(tableName, "name"),
 		Email:        buildUserColumn(tableName, "email"),
-		CreatedAt:    buildUserColumn(tableName, "created_at"),
-		UpdatedAt:    buildUserColumn(tableName, "updated_at"),
-		DeletedAt:    buildUserColumn(tableName, "deleted_at"),
+		CreateTime:   buildUserColumn(tableName, "create_time"),
+		UpdateTime:   buildUserColumn(tableName, "update_time"),
+		DeleteTime:   buildUserColumn(tableName, "delete_time"),
 		PasswordHash: buildUserColumn(tableName, "password_hash"),
 	}
 }
@@ -70,9 +70,9 @@ type userColumns struct {
 	ID           userColumn
 	Name         userColumn
 	Email        userColumn
-	CreatedAt    userColumn
-	UpdatedAt    userColumn
-	DeletedAt    userColumn
+	CreateTime   userColumn
+	UpdateTime   userColumn
+	DeleteTime   userColumn
 	PasswordHash userColumn
 }
 
@@ -122,9 +122,9 @@ type UserSetter struct {
 	ID           omit.Val[int64]         `db:"id,pk" `
 	Name         omit.Val[string]        `db:"name" `
 	Email        omit.Val[string]        `db:"email" `
-	CreatedAt    omit.Val[time.Time]     `db:"created_at" `
-	UpdatedAt    omit.Val[time.Time]     `db:"updated_at" `
-	DeletedAt    omitnull.Val[time.Time] `db:"deleted_at" `
+	CreateTime   omit.Val[time.Time]     `db:"create_time" `
+	UpdateTime   omit.Val[time.Time]     `db:"update_time" `
+	DeleteTime   omitnull.Val[time.Time] `db:"delete_time" `
 	PasswordHash omit.Val[[]byte]        `db:"password_hash" `
 }
 
@@ -139,14 +139,14 @@ func (s UserSetter) SetColumns() []string {
 	if s.Email.IsValue() {
 		vals = append(vals, "email")
 	}
-	if s.CreatedAt.IsValue() {
-		vals = append(vals, "created_at")
+	if s.CreateTime.IsValue() {
+		vals = append(vals, "create_time")
 	}
-	if s.UpdatedAt.IsValue() {
-		vals = append(vals, "updated_at")
+	if s.UpdateTime.IsValue() {
+		vals = append(vals, "update_time")
 	}
-	if s.DeletedAt.IsValue() || s.DeletedAt.IsNull() {
-		vals = append(vals, "deleted_at")
+	if s.DeleteTime.IsValue() || s.DeleteTime.IsNull() {
+		vals = append(vals, "delete_time")
 	}
 	if s.PasswordHash.IsValue() {
 		vals = append(vals, "password_hash")
@@ -164,14 +164,14 @@ func (s UserSetter) Overwrite(t *User) {
 	if s.Email.IsValue() {
 		t.Email = s.Email.MustGet()
 	}
-	if s.CreatedAt.IsValue() {
-		t.CreatedAt = s.CreatedAt.MustGet()
+	if s.CreateTime.IsValue() {
+		t.CreateTime = s.CreateTime.MustGet()
 	}
-	if s.UpdatedAt.IsValue() {
-		t.UpdatedAt = s.UpdatedAt.MustGet()
+	if s.UpdateTime.IsValue() {
+		t.UpdateTime = s.UpdateTime.MustGet()
 	}
-	if s.DeletedAt.IsValue() || s.DeletedAt.IsNull() {
-		t.DeletedAt = s.DeletedAt.MustGetNull()
+	if s.DeleteTime.IsValue() || s.DeleteTime.IsNull() {
+		t.DeleteTime = s.DeleteTime.MustGetNull()
 	}
 	if s.PasswordHash.IsValue() {
 		t.PasswordHash = s.PasswordHash.MustGet()
@@ -200,20 +200,20 @@ func (s *UserSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.Email.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.CreatedAt.IsUnset() {
+			if s.CreateTime.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
-			return psql.Arg(s.CreatedAt.MustGet()).WriteSQL(ctx, w, d, start)
+			return psql.Arg(s.CreateTime.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.UpdatedAt.IsUnset() {
+			if s.UpdateTime.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
-			return psql.Arg(s.UpdatedAt.MustGet()).WriteSQL(ctx, w, d, start)
+			return psql.Arg(s.UpdateTime.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.DeletedAt.IsUnset() {
+			if s.DeleteTime.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
-			return psql.Arg(s.DeletedAt.MustGetNull()).WriteSQL(ctx, w, d, start)
+			return psql.Arg(s.DeleteTime.MustGetNull()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.PasswordHash.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
@@ -250,24 +250,24 @@ func (s UserSetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
-	if s.CreatedAt.IsValue() {
+	if s.CreateTime.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "created_at")...),
-			psql.Arg(s.CreatedAt),
+			psql.Quote(append(prefix, "create_time")...),
+			psql.Arg(s.CreateTime),
 		}})
 	}
 
-	if s.UpdatedAt.IsValue() {
+	if s.UpdateTime.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "updated_at")...),
-			psql.Arg(s.UpdatedAt),
+			psql.Quote(append(prefix, "update_time")...),
+			psql.Arg(s.UpdateTime),
 		}})
 	}
 
-	if s.DeletedAt.IsValue() || s.DeletedAt.IsNull() {
+	if s.DeleteTime.IsValue() || s.DeleteTime.IsNull() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "deleted_at")...),
-			psql.Arg(s.DeletedAt),
+			psql.Quote(append(prefix, "delete_time")...),
+			psql.Arg(s.DeleteTime),
 		}})
 	}
 
@@ -297,12 +297,12 @@ func userScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func(a
 			targets = append(targets, target{i, func(o *User) any { return &o.Name }})
 		case "email":
 			targets = append(targets, target{i, func(o *User) any { return &o.Email }})
-		case "created_at":
-			targets = append(targets, target{i, func(o *User) any { return &o.CreatedAt }})
-		case "updated_at":
-			targets = append(targets, target{i, func(o *User) any { return &o.UpdatedAt }})
-		case "deleted_at":
-			targets = append(targets, target{i, func(o *User) any { return &o.DeletedAt }})
+		case "create_time":
+			targets = append(targets, target{i, func(o *User) any { return &o.CreateTime }})
+		case "update_time":
+			targets = append(targets, target{i, func(o *User) any { return &o.UpdateTime }})
+		case "delete_time":
+			targets = append(targets, target{i, func(o *User) any { return &o.DeleteTime }})
 		case "password_hash":
 			targets = append(targets, target{i, func(o *User) any { return &o.PasswordHash }})
 		}
@@ -584,9 +584,9 @@ type userWhere[Q psql.Filterable] struct {
 	ID           psql.WhereMod[Q, int64]
 	Name         psql.WhereMod[Q, string]
 	Email        psql.WhereMod[Q, string]
-	CreatedAt    psql.WhereMod[Q, time.Time]
-	UpdatedAt    psql.WhereMod[Q, time.Time]
-	DeletedAt    psql.WhereNullMod[Q, time.Time]
+	CreateTime   psql.WhereMod[Q, time.Time]
+	UpdateTime   psql.WhereMod[Q, time.Time]
+	DeleteTime   psql.WhereNullMod[Q, time.Time]
 	PasswordHash psql.WhereMod[Q, []byte]
 }
 
@@ -600,9 +600,9 @@ func buildUserWhere[Q psql.Filterable](cols userColumns) userWhere[Q] {
 		ID:           psql.Where[Q, int64](cols.ID.Expression),
 		Name:         psql.Where[Q, string](cols.Name.Expression),
 		Email:        psql.Where[Q, string](cols.Email.Expression),
-		CreatedAt:    psql.Where[Q, time.Time](cols.CreatedAt.Expression),
-		UpdatedAt:    psql.Where[Q, time.Time](cols.UpdatedAt.Expression),
-		DeletedAt:    psql.WhereNull[Q, time.Time](cols.DeletedAt.Expression),
+		CreateTime:   psql.Where[Q, time.Time](cols.CreateTime.Expression),
+		UpdateTime:   psql.Where[Q, time.Time](cols.UpdateTime.Expression),
+		DeleteTime:   psql.WhereNull[Q, time.Time](cols.DeleteTime.Expression),
 		PasswordHash: psql.Where[Q, []byte](cols.PasswordHash.Expression),
 	}
 }

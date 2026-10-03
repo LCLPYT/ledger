@@ -1,4 +1,18 @@
+default:
+    just -l
+
+DB_DSN := "postgres://db:db@localhost:5432/db?sslmode=disable"
+
 check: fmt-check lint
+
+alias db-gen := bobgen
+
+migrate: db
+    go run github.com/pressly/goose/v3/cmd/goose@$(go list -m -f '{{{{.Version}}' github.com/pressly/goose/v3) \
+        -dir internal/db/migrations postgres "{{DB_DSN}}" up
+
+bobgen: migrate
+    cd internal && PSQL_DSN="{{DB_DSN}}" go run github.com/stephenafamo/bob/gen/bobgen-psql@$(go list -m -f '{{{{.Version}}' github.com/stephenafamo/bob) -c ../bobgen.yaml
 
 buf-update:
 	cd proto && buf dep update
