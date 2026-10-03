@@ -29,8 +29,19 @@ type gamesApi struct {
 }
 
 func (g *gamesApi) GetGame(ctx context.Context, request *ledgerv1.GetGameRequest) (*ledgerv1.Game, error) {
-	//TODO implement me
-	panic("implement me")
+	id, err := parseGameId(request.GetName())
+
+	if err != nil {
+		return nil, fmt.Errorf("games: invalid game name: %w", err)
+	}
+
+	game, err := g.gamesService.GetById(ctx, id)
+
+	if err != nil {
+		return nil, fmt.Errorf("games: failed to get game %q: %w", request.GetName(), err)
+	}
+
+	return gameToProto(game)
 }
 
 func (g *gamesApi) ListGames(ctx context.Context, request *ledgerv1.ListGamesRequest) (*ledgerv1.ListGamesResponse, error) {
@@ -146,4 +157,14 @@ func gameTypeFromProto(t ledgerv1.Game_Type) enums.GameType {
 	default:
 		return enums.GameTypeGame
 	}
+}
+
+func parseGameId(name string) (string, error) {
+	ids, err := games.Pattern.Parse(name)
+
+	if err != nil {
+		return "", err
+	}
+
+	return ids[0], nil
 }

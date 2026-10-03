@@ -2,6 +2,8 @@ package games
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"fmt"
 	"time"
 
@@ -91,6 +93,25 @@ func (s *Service) Create(
 		}
 
 		return nil, fmt.Errorf("game service: failed to insert game: %w", err)
+	}
+
+	return game, nil
+}
+
+func (s *Service) GetById(
+	ctx context.Context,
+	id string,
+) (*model.Game, error) {
+	game, err := model.Games.Query(
+		model.SelectWhere.Games.ID.EQ(id),
+	).One(ctx, s.db)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, apperr.NotFound("GAME_NOT_FOUND", ResourceType, Pattern.Format(id))
+		}
+
+		return nil, fmt.Errorf("game service: failed to query game by id: %w", err)
 	}
 
 	return game, nil
