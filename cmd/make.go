@@ -11,7 +11,7 @@ import (
 	"os"
 	"strings"
 
-	model2 "github.com/lclpyt/ledger/internal/model"
+	"github.com/lclpyt/ledger/gen/go/bob/model"
 	"github.com/lclpyt/ledger/internal/util"
 	"github.com/lclpyt/ledger/internal/wiring"
 
@@ -141,8 +141,8 @@ func makeUser(ctx context.Context, db bob.DB) error {
 		return err
 	}
 
-	emailExists, err := model2.Users.Query(
-		model2.SelectWhere.Users.Email.EQ(email),
+	emailExists, err := model.Users.Query(
+		model.SelectWhere.Users.Email.EQ(email),
 	).Exists(ctx, db)
 
 	if err != nil {
@@ -181,7 +181,7 @@ func makeUser(ctx context.Context, db bob.DB) error {
 		return err
 	}
 
-	user, err := model2.Users.Insert(&model2.UserSetter{
+	user, err := model.Users.Insert(&model.UserSetter{
 		Name:         omit.From(username),
 		Email:        omit.From(email),
 		PasswordHash: omit.From(passwordHash),

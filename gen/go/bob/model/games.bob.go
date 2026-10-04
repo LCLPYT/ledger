@@ -12,7 +12,7 @@ import (
 	"github.com/aarondl/opt/null"
 	"github.com/aarondl/opt/omit"
 	"github.com/aarondl/opt/omitnull"
-	enums "github.com/lclpyt/ledger/internal/model/enums"
+	enums "github.com/lclpyt/ledger/gen/go/bob/enums"
 	"github.com/stephenafamo/bob"
 	"github.com/stephenafamo/bob/dialect/psql"
 	"github.com/stephenafamo/bob/dialect/psql/dialect"

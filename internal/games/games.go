@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/aarondl/opt/omitnull"
-	"github.com/lclpyt/ledger/internal/model"
+	"github.com/lclpyt/ledger/gen/go/bob/model"
 	"github.com/quadrubo/golib/apperr"
 	"github.com/quadrubo/golib/fieldmask"
 	"github.com/quadrubo/golib/pagination"

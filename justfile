@@ -12,7 +12,7 @@ migrate: db
         -dir internal/db/migrations postgres "{{DB_DSN}}" up
 
 bobgen: migrate
-    cd internal && PSQL_DSN="{{DB_DSN}}" go run github.com/stephenafamo/bob/gen/bobgen-psql@$(go list -m -f '{{{{.Version}}' github.com/stephenafamo/bob) -c ../bobgen.yaml
+    PSQL_DSN="{{DB_DSN}}" go run github.com/stephenafamo/bob/gen/bobgen-psql@$(go list -m -f '{{{{.Version}}' github.com/stephenafamo/bob) -c bobgen.yaml
 
 buf-update:
 	cd proto && buf dep update

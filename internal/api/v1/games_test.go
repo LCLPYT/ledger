@@ -22,8 +22,8 @@ import (
 	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	ledgerv1 "github.com/lclpyt/ledger/gen/go/apis/ledger/v1"
-	"github.com/lclpyt/ledger/internal/model"
-	"github.com/lclpyt/ledger/internal/model/enums"
+	"github.com/lclpyt/ledger/gen/go/bob/enums"
+	"github.com/lclpyt/ledger/gen/go/bob/model"
 	"github.com/lclpyt/ledger/internal/wiring"
 )
 
