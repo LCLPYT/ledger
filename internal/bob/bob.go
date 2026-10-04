@@ -24,6 +24,7 @@ func (m *module) Name() string { return "bob" }
 
 func (m *module) Provide(_ context.Context, i do.Injector) error {
 	db, err := do.Invoke[*sql.DB](i)
+
 	if err != nil {
 		return fmt.Errorf("bob: failed to obtain database: %w", err)
 	}
@@ -37,6 +38,7 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 
 func (m *module) Stop() error {
 	err := m.db.Close()
+
 	if err != nil {
 		return fmt.Errorf("bob: failed to close database: %w", err)
 	}

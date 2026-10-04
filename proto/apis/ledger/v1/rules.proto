@@ -1,0 +1,20 @@
+edition = "2023";
+
+package apis.ledger.v1;
+
+import "buf/validate/validate.proto";
+
+option go_package = "github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1";
+
+// Shared validation rules.
+extend buf.validate.StringRules {
+  // Takes a pattern where `*` is one id segment:
+  // `tracks/*`, `tracks/*/points/*`.
+  string resource_name = 1000 [(buf.validate.predefined).cel = {
+    id: "string.resource_name"
+    expression:
+      "this.matches('^' + rule.replace('*', '[a-z]([a-z0-9-]{0,61}[a-z0-9])?') + '$')"
+      "  ? ''"
+      "  : 'must be a valid ' + rule + ' resource name'"
+  }];
+}

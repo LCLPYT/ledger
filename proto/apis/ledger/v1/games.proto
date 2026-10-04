@@ -1,0 +1,224 @@
+syntax = "proto3";
+
+package apis.ledger.v1;
+
+import "apis/ledger/v1/rules.proto";
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/api/resource.proto";
+import "google/protobuf/field_mask.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1";
+
+// GamesService manages all registered games.
+service GamesService {
+  // Get game info.
+  rpc GetGame(GetGameRequest) returns (Game) {
+    option (google.api.http) = {get: "/v1/{name=games/*}"};
+    option (google.api.method_signature) = "name";
+  }
+
+  // List registered games.
+  rpc ListGames(ListGamesRequest) returns (ListGamesResponse) {
+    option (google.api.http) = {get: "/v1/games"};
+  }
+
+  // Create a new game from a unique game id.
+  rpc CreateGame(CreateGameRequest) returns (Game) {
+    option (google.api.http) = {
+      post: "/v1/games"
+      body: "game"
+    };
+    option (google.api.method_signature) = "game,game_id";
+  }
+
+  // Update game info of a game identified by the given id.
+  rpc UpdateGame(UpdateGameRequest) returns (Game) {
+    option (google.api.http) = {
+      patch: "/v1/{game.name=games/*}"
+      body: "game"
+    };
+    option (google.api.method_signature) = "game,update_mask";
+  }
+
+  // Soft delete a game. The game can be restored with UndeleteGame.
+  rpc DeleteGame(DeleteGameRequest) returns (Game) {
+    option (google.api.http) = {delete: "/v1/{name=games/*}"};
+    option (google.api.method_signature) = "name";
+  }
+
+  // Restore a soft deleted game.
+  rpc UndeleteGame(UndeleteGameRequest) returns (Game) {
+    option (google.api.http) = {
+      post: "/v1/{name=games/*}:undelete"
+      body: "*"
+    };
+  }
+}
+
+// Request message for get game info.
+message GetGameRequest {
+  // The resource name of the game to get.
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "ledger.lclpnet.work/Game"}
+  ];
+}
+
+// Request message for the list games api.
+message ListGamesRequest {
+  // Maximum number of games to return. Fewer games may be returned.
+  // If unspecified, 50 games will be returned.
+  // Maximum value is 1000 and higher values will be clamped.
+  int32 page_size = 1 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).int32.gte = 0
+  ];
+
+  // Page token received from the previous list call.
+  // If provided, the subsequent page will be returned.
+  string page_token = 2 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).string.max_len = 4096
+  ];
+
+  // If true, soft deleted games are included in the response.
+  bool show_deleted = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// Response message of list games request.
+message ListGamesResponse {
+  // The page of games.
+  repeated Game games = 1;
+
+  // Token that can be used in the next list request in order to retrieve the next page.
+  string next_page_token = 2;
+}
+
+// Request message to create / register a new game.
+message CreateGameRequest {
+  // The game to create.
+  Game game = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).required = true
+  ];
+
+  // Unique id of the game, used as the last segment of its resource name.
+  // Must start with a letter, end with a letter or digit and contain only
+  // lowercase letters, digits and hyphens (AIP-122).
+  string game_id = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).string.pattern = "^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$"
+  ];
+}
+
+// Request message to update game info.
+message UpdateGameRequest {
+  option (buf.validate.message).cel = {
+    id: "update_game_request.game.required"
+    message: "game is required"
+    expression: "has(this.game)"
+  };
+
+  // Game info to update.
+  Game game = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).ignore = IGNORE_ALWAYS
+  ];
+
+  // Fields to update. Omit to update all writable fields.
+  google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// Request message to delete a game.
+message DeleteGameRequest {
+  // Resource name of the game to delete.
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "ledger.lclpnet.work/Game"}
+  ];
+}
+
+// Request message to restore a soft deleted game.
+message UndeleteGameRequest {
+  // Resource name of the game to restore.
+  string name = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.resource_reference) = {type: "ledger.lclpnet.work/Game"}
+  ];
+}
+
+// Generic game info including unique id and translated names.
+// Games may have different types, such as minigames which are played as parts of "bigger" games.
+message Game {
+  option (google.api.resource) = {
+    type: "ledger.lclpnet.work/Game"
+    pattern: "games/{game}"
+    singular: "game"
+    plural: "games"
+  };
+
+  // Kind of game.
+  enum Type {
+    // Default value, never set on a stored game.
+    TYPE_UNSPECIFIED = 0;
+
+    // Root-level game.
+    TYPE_GAME = 1;
+
+    // Game that may be played as part of a root-level game.
+    TYPE_MINIGAME = 2;
+  }
+
+  // Resource name of the game.
+  string name = 1 [
+    (google.api.field_behavior) = IDENTIFIER,
+    (buf.validate.field).ignore = IGNORE_IF_ZERO_VALUE,
+    (buf.validate.field).string.(resource_name) = "games/*"
+  ];
+
+  // Type of the game.
+  // "game" games are the root-level game type.
+  // "minigame" is a subtype of game that may be played as part of a root-level "game".
+  // Minigames are deliberately not statically linked to root-level games, as some minigames may occur in different kinds of games.
+  // Cannot be changed after creation.
+  Type type = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (google.api.field_behavior) = IMMUTABLE,
+    (buf.validate.field).enum = {
+      defined_only: true
+      not_in: 0
+    }
+  ];
+
+  // Names of the game in different locales as a flat map.
+  // Keys are lowercase BCP 47 language tags, e.g. "en", "en-us", "zh-hans-cn".
+  map<string, string> name_translations = 3 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).map = {
+      keys: {
+        string: {pattern: "^[a-z]{2,3}(-[a-z]{4})?(-[a-z]{2}|-[0-9]{3})?$"}
+      }
+    },
+    (buf.validate.field).cel = {
+      id: "game.name_translations.has_en"
+      message: "name_translations map must contain a non-empty 'en' key"
+      expression: "'en' in this && this['en'].size() > 0"
+    }
+  ];
+
+  // Time when the game was registered.
+  google.protobuf.Timestamp create_time = 100 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Time when the game was last updated.
+  google.protobuf.Timestamp update_time = 101 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Time when the game was soft deleted. Unset if the game is not deleted.
+  google.protobuf.Timestamp delete_time = 102 [(google.api.field_behavior) = OUTPUT_ONLY];
+
+  // Time after which a soft deleted game is permanently deleted. Unset if the game is not deleted.
+  google.protobuf.Timestamp purge_time = 103 [(google.api.field_behavior) = OUTPUT_ONLY];
+}

@@ -8,10 +8,10 @@ psql:
 
 plugins:
   models:
-    destination: model
+    destination: gen/go/bob/model
     pkgname: model
   enums:
-    destination: model/enums
+    destination: gen/go/bob/enums
     pkgname: enums
   dbinfo:
     disabled: true
