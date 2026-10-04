@@ -45,7 +45,6 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 
 	gamesService := games.NewService(db)
 
-	ledgerv1.RegisterTestServiceServer(server, newTestAPI())
 	ledgerv1.RegisterGamesServiceServer(server, newGamesApi(gamesService, validator))
 
 	return nil
