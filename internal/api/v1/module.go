@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"buf.build/go/protovalidate"
 	ledgerv1 "github.com/lclpyt/ledger/gen/go/apis/ledger/v1"
 	"github.com/lclpyt/ledger/internal/games"
 	"github.com/stephenafamo/bob"
@@ -27,19 +28,25 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 	server, err := do.Invoke[*grpc.Server](i)
 
 	if err != nil {
-		return fmt.Errorf("apiv1: failed to invoke the server: %w", err)
+		return fmt.Errorf("apiv1: failed to inject the server: %w", err)
 	}
 
 	db, err := do.Invoke[bob.DB](i)
 
 	if err != nil {
-		return fmt.Errorf("apiv1: failed to invoke the db: %w", err)
+		return fmt.Errorf("apiv1: failed to inject the db: %w", err)
+	}
+
+	validator, err := do.Invoke[protovalidate.Validator](i)
+
+	if err != nil {
+		return fmt.Errorf("apiv1: failed to inject the validator: %w", err)
 	}
 
 	gamesService := games.NewService(db)
 
 	ledgerv1.RegisterTestServiceServer(server, newTestAPI())
-	ledgerv1.RegisterGamesServiceServer(server, newGamesApi(gamesService))
+	ledgerv1.RegisterGamesServiceServer(server, newGamesApi(gamesService, validator))
 
 	return nil
 }

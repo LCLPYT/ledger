@@ -4,6 +4,7 @@ go 1.26.5
 
 require (
 	buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go v1.36.12-20260825204119-511051f7f437.2
+	buf.build/go/protovalidate v1.4.0
 	github.com/aarondl/opt v0.0.0-20250607033636-982744e1bd65
 	github.com/onsi/ginkgo/v2 v2.32.0
 	github.com/onsi/gomega v1.42.1
@@ -20,7 +21,6 @@ require (
 )
 
 require (
-	buf.build/go/protovalidate v1.4.0 // indirect
 	cel.dev/cel-go v0.32.0 // indirect
 	cel.dev/expr v0.25.3 // indirect
 	github.com/Masterminds/semver/v3 v3.4.0 // indirect

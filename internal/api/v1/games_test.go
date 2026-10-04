@@ -19,6 +19,7 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/testing/protocmp"
+	"google.golang.org/protobuf/types/known/fieldmaskpb"
 
 	ledgerv1 "github.com/lclpyt/ledger/gen/go/apis/ledger/v1"
 	"github.com/lclpyt/ledger/internal/model"
@@ -441,5 +442,320 @@ var _ = Describe("GamesService", func() {
 			expectStatus(err, codes.InvalidArgument)
 			Expect(err).To(HaveViolatedField("page_size"))
 		})
+	})
+
+	Describe("UpdateGame", func() {
+		update := func(ctx context.Context, game *ledgerv1.Game, paths ...string) (*ledgerv1.Game, error) {
+			req := &ledgerv1.UpdateGameRequest{Game: game}
+
+			if len(paths) > 0 {
+				req.UpdateMask = &fieldmaskpb.FieldMask{Paths: paths}
+			}
+
+			return client.UpdateGame(ctx, req)
+		}
+
+		It("replaces the name translations the mask selects", func(ctx SpecContext) {
+			created := createGame(ctx)
+			translations := map[string]string{"en": "TNT Run", "fr": "Course TNT"}
+
+			updated, err := update(ctx, &ledgerv1.Game{
+				Name:             created.GetName(),
+				NameTranslations: translations,
+			}, "name_translations")
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updated.GetName()).To(Equal(created.GetName()))
+			Expect(updated.GetType()).To(Equal(created.GetType()))
+			Expect(updated.GetNameTranslations()).To(Equal(translations))
+			Expect(updated.GetCreateTime()).To(BeComparableTo(created.GetCreateTime(), protocmp.Transform()))
+			Expect(updated.GetUpdateTime().AsTime()).To(BeTemporally(">", created.GetUpdateTime().AsTime()))
+		})
+
+		It("stores the update the get returns", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			updated, err := update(ctx, &ledgerv1.Game{
+				Name:             created.GetName(),
+				NameTranslations: map[string]string{"en": "TNT Run"},
+			}, "name_translations")
+			Expect(err).ToNot(HaveOccurred())
+
+			found, err := client.GetGame(ctx, &ledgerv1.GetGameRequest{Name: created.GetName()})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(found).To(BeComparableTo(updated, protocmp.Transform()))
+		})
+
+		It("updates every writable field without a mask", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			updated, err := update(ctx, &ledgerv1.Game{
+				Name:             created.GetName(),
+				NameTranslations: map[string]string{"en": "TNT Run"},
+			})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updated.GetNameTranslations()).To(Equal(map[string]string{"en": "TNT Run"}))
+			Expect(updated.GetType()).To(Equal(created.GetType()))
+		})
+
+		It("validates the full writable set without a mask", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			_, err := update(ctx, &ledgerv1.Game{Name: created.GetName()})
+
+			expectStatus(err, codes.InvalidArgument)
+			Expect(err).To(HaveViolatedField("game.name_translations"))
+		})
+
+		It("leaves out of validation the fields the mask does not select", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			updated, err := update(ctx, &ledgerv1.Game{
+				Name:             created.GetName(),
+				Type:             ledgerv1.Game_TYPE_UNSPECIFIED,
+				NameTranslations: map[string]string{"en": "TNT Run"},
+			}, "name_translations")
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updated.GetType()).To(Equal(created.GetType()))
+		})
+
+		It("takes the immutable type under an unchanged value", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			updated, err := update(ctx, &ledgerv1.Game{
+				Name:             created.GetName(),
+				Type:             created.GetType(),
+				NameTranslations: map[string]string{"en": "TNT Run"},
+			}, "type", "name_translations")
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(updated.GetType()).To(Equal(created.GetType()))
+			Expect(updated.GetNameTranslations()).To(Equal(map[string]string{"en": "TNT Run"}))
+		})
+
+		It("names game.type on an InvalidArgument for a changed type", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			_, err := update(ctx, &ledgerv1.Game{
+				Name: created.GetName(),
+				Type: ledgerv1.Game_TYPE_GAME,
+			}, "type")
+
+			expectStatus(err, codes.InvalidArgument)
+			Expect(err).To(HaveReason("IMMUTABLE_FIELD"))
+			Expect(err).To(HaveViolatedField("game.type"))
+
+			found, err := client.GetGame(ctx, &ledgerv1.GetGameRequest{Name: created.GetName()})
+			Expect(err).ToNot(HaveOccurred())
+			Expect(found.GetType()).To(Equal(created.GetType()))
+		})
+
+		It("returns a FailedPrecondition for a deleted game", func(ctx SpecContext) {
+			name := seedDeletedGame(ctx)
+
+			_, err := update(ctx, &ledgerv1.Game{
+				Name:             name,
+				NameTranslations: map[string]string{"en": "TNT Run"},
+			}, "name_translations")
+
+			expectStatus(err, codes.FailedPrecondition)
+			Expect(err).To(HaveReason("GAME_DELETED"))
+			Expect(err).To(HaveErrorMetadata("name", name))
+		})
+
+		It("returns a NotFound for a game that does not exist", func(ctx SpecContext) {
+			name := "games/" + testkit.ResourceID("absent")
+
+			_, err := update(ctx, &ledgerv1.Game{
+				Name:             name,
+				NameTranslations: map[string]string{"en": "TNT Run"},
+			}, "name_translations")
+
+			expectStatus(err, codes.NotFound)
+			Expect(err).To(HaveReason("GAME_NOT_FOUND"))
+			Expect(err).To(HaveErrorMetadata("name", name))
+		})
+
+		It("names update_mask on an InvalidArgument for a path outside the update paths",
+			func(ctx SpecContext) {
+				created := createGame(ctx)
+
+				_, err := update(ctx, &ledgerv1.Game{Name: created.GetName()}, "create_time")
+
+				expectStatus(err, codes.InvalidArgument)
+				Expect(err).To(HaveReason("INVALID_UPDATE_MASK"))
+				Expect(err).To(HaveViolatedField("update_mask"))
+			})
+
+		It("returns an InvalidArgument without a game", func(ctx SpecContext) {
+			_, err := client.UpdateGame(ctx, &ledgerv1.UpdateGameRequest{})
+
+			expectStatus(err, codes.InvalidArgument)
+		})
+
+		DescribeTable("names game.name on an InvalidArgument for a malformed name",
+			func(ctx SpecContext, name string) {
+				_, err := update(ctx, &ledgerv1.Game{
+					Name:             name,
+					NameTranslations: map[string]string{"en": "TNT Run"},
+				}, "name_translations")
+
+				expectStatus(err, codes.InvalidArgument)
+				Expect(err).To(HaveViolatedField("game.name"))
+			},
+			Entry("empty", ""),
+			Entry("of another collection", "users/spleef"),
+			Entry("with an id outside the id pattern", "games/Spleef"),
+		)
+
+		DescribeTable("rejects selected fields that break their rules",
+			func(ctx SpecContext, field string, game *ledgerv1.Game, paths ...string) {
+				game.Name = createGame(ctx).GetName()
+
+				_, err := update(ctx, game, paths...)
+
+				expectStatus(err, codes.InvalidArgument)
+				Expect(err).To(HaveViolatedField(field))
+			},
+			Entry("without an english name", "game.name_translations",
+				&ledgerv1.Game{NameTranslations: map[string]string{"de": "Spleef"}}, "name_translations"),
+			Entry("with an empty english name", "game.name_translations",
+				&ledgerv1.Game{NameTranslations: map[string]string{"en": ""}}, "name_translations"),
+			Entry("with a malformed language tag", `game.name_translations["EN"]`,
+				&ledgerv1.Game{NameTranslations: map[string]string{"en": "Spleef", "EN": "Spleef"}},
+				"name_translations"),
+			Entry("with an unspecified type", "game.type",
+				&ledgerv1.Game{Type: ledgerv1.Game_TYPE_UNSPECIFIED}, "type"),
+			Entry("with an undefined type", "game.type",
+				&ledgerv1.Game{Type: 99}, "type"),
+		)
+	})
+
+	Describe("DeleteGame", func() {
+		It("marks the game deleted and schedules its purge", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			deleted, err := client.DeleteGame(ctx, &ledgerv1.DeleteGameRequest{Name: created.GetName()})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(deleted.GetName()).To(Equal(created.GetName()))
+			Expect(deleted.GetDeleteTime().AsTime()).To(BeTemporally("~", time.Now(), time.Minute))
+			Expect(deleted.GetPurgeTime().AsTime()).To(
+				BeTemporally("~", deleted.GetDeleteTime().AsTime().Add(30*24*time.Hour), time.Second))
+		})
+
+		It("keeps the game for the get", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			deleted, err := client.DeleteGame(ctx, &ledgerv1.DeleteGameRequest{Name: created.GetName()})
+			Expect(err).ToNot(HaveOccurred())
+
+			found, err := client.GetGame(ctx, &ledgerv1.GetGameRequest{Name: created.GetName()})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(found).To(BeComparableTo(deleted, protocmp.Transform()))
+		})
+
+		It("leaves the game out of the list", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			_, err := client.DeleteGame(ctx, &ledgerv1.DeleteGameRequest{Name: created.GetName()})
+			Expect(err).ToNot(HaveOccurred())
+
+			Expect(listAll(ctx, &ledgerv1.ListGamesRequest{})).ToNot(ContainElement(created.GetName()))
+		})
+
+		It("returns a NotFound for a game already deleted", func(ctx SpecContext) {
+			name := seedDeletedGame(ctx)
+
+			_, err := client.DeleteGame(ctx, &ledgerv1.DeleteGameRequest{Name: name})
+
+			expectStatus(err, codes.NotFound)
+			Expect(err).To(HaveReason("GAME_ALREADY_DELETED"))
+			Expect(err).To(HaveErrorMetadata("name", name))
+		})
+
+		It("returns a NotFound for a game that does not exist", func(ctx SpecContext) {
+			name := "games/" + testkit.ResourceID("absent")
+
+			_, err := client.DeleteGame(ctx, &ledgerv1.DeleteGameRequest{Name: name})
+
+			expectStatus(err, codes.NotFound)
+			Expect(err).To(HaveReason("GAME_NOT_FOUND"))
+		})
+
+		DescribeTable("names name on an InvalidArgument for a malformed name",
+			func(ctx SpecContext, name string) {
+				_, err := client.DeleteGame(ctx, &ledgerv1.DeleteGameRequest{Name: name})
+
+				expectStatus(err, codes.InvalidArgument)
+				Expect(err).To(HaveViolatedField("name"))
+			},
+			Entry("empty", ""),
+			Entry("of another collection", "users/spleef"),
+			Entry("with an id outside the id pattern", "games/Spleef"),
+		)
+	})
+
+	Describe("UndeleteGame", func() {
+		It("restores a deleted game", func(ctx SpecContext) {
+			name := seedDeletedGame(ctx)
+
+			restored, err := client.UndeleteGame(ctx, &ledgerv1.UndeleteGameRequest{Name: name})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(restored.GetName()).To(Equal(name))
+			Expect(restored.GetDeleteTime()).To(BeNil())
+			Expect(restored.GetPurgeTime()).To(BeNil())
+			Expect(listAll(ctx, &ledgerv1.ListGamesRequest{})).To(ContainElement(name))
+		})
+
+		It("restores the game a delete removed", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			_, err := client.DeleteGame(ctx, &ledgerv1.DeleteGameRequest{Name: created.GetName()})
+			Expect(err).ToNot(HaveOccurred())
+
+			restored, err := client.UndeleteGame(ctx, &ledgerv1.UndeleteGameRequest{Name: created.GetName()})
+
+			Expect(err).ToNot(HaveOccurred())
+			Expect(restored.GetType()).To(Equal(created.GetType()))
+			Expect(restored.GetNameTranslations()).To(Equal(created.GetNameTranslations()))
+			Expect(restored.GetCreateTime()).To(BeComparableTo(created.GetCreateTime(), protocmp.Transform()))
+		})
+
+		It("returns an AlreadyExists for a game that is not deleted", func(ctx SpecContext) {
+			created := createGame(ctx)
+
+			_, err := client.UndeleteGame(ctx, &ledgerv1.UndeleteGameRequest{Name: created.GetName()})
+
+			expectStatus(err, codes.AlreadyExists)
+			Expect(err).To(HaveReason("GAME_NOT_DELETED"))
+			Expect(err).To(HaveErrorMetadata("name", created.GetName()))
+		})
+
+		It("returns a NotFound for a game that does not exist", func(ctx SpecContext) {
+			name := "games/" + testkit.ResourceID("absent")
+
+			_, err := client.UndeleteGame(ctx, &ledgerv1.UndeleteGameRequest{Name: name})
+
+			expectStatus(err, codes.NotFound)
+			Expect(err).To(HaveReason("GAME_NOT_FOUND"))
+		})
+
+		DescribeTable("names name on an InvalidArgument for a malformed name",
+			func(ctx SpecContext, name string) {
+				_, err := client.UndeleteGame(ctx, &ledgerv1.UndeleteGameRequest{Name: name})
+
+				expectStatus(err, codes.InvalidArgument)
+				Expect(err).To(HaveViolatedField("name"))
+			},
+			Entry("empty", ""),
+			Entry("of another collection", "users/spleef"),
+			Entry("with an id outside the id pattern", "games/Spleef"),
+		)
 	})
 })

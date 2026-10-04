@@ -6,19 +6,23 @@ import (
 	"fmt"
 	"strconv"
 
+	"buf.build/go/protovalidate"
 	"github.com/aarondl/opt/omit"
 	ledgerv1 "github.com/lclpyt/ledger/gen/go/apis/ledger/v1"
 	"github.com/lclpyt/ledger/internal/games"
 	"github.com/lclpyt/ledger/internal/model"
 	"github.com/lclpyt/ledger/internal/model/enums"
 	"github.com/quadrubo/golib/apperr"
+	"github.com/quadrubo/golib/fieldmask"
+	"github.com/quadrubo/golib/grpcinterceptor/validate"
 	"github.com/quadrubo/golib/protoconv"
 	"github.com/stephenafamo/bob/types"
 )
 
-func newGamesApi(gamesService *games.Service) *gamesApi {
+func newGamesApi(gamesService *games.Service, validator protovalidate.Validator) *gamesApi {
 	return &gamesApi{
 		gamesService: gamesService,
+		validator:    validator,
 	}
 }
 
@@ -26,6 +30,7 @@ type gamesApi struct {
 	ledgerv1.UnimplementedGamesServiceServer
 
 	gamesService *games.Service
+	validator    protovalidate.Validator
 }
 
 func (g *gamesApi) GetGame(ctx context.Context, request *ledgerv1.GetGameRequest) (*ledgerv1.Game, error) {
@@ -108,18 +113,79 @@ func (g *gamesApi) CreateGame(ctx context.Context, request *ledgerv1.CreateGameR
 }
 
 func (g *gamesApi) UpdateGame(ctx context.Context, request *ledgerv1.UpdateGameRequest) (*ledgerv1.Game, error) {
-	//TODO implement me
-	panic("implement me")
+	id, err := parseGameId(request.GetGame().GetName())
+
+	if err != nil {
+		return nil, apperr.InvalidResourceName("game.name", err, request.GetGame().GetName())
+	}
+
+	mask, err := fieldmask.Parse(request.GetUpdateMask(), games.UpdatePaths)
+
+	if err != nil {
+		return nil, apperr.InvalidUpdateMask(err, request.GetUpdateMask())
+	}
+
+	if err := validate.Masked(g.validator, request.GetGame(), mask, "game"); err != nil {
+		return nil, err
+	}
+
+	game, err := g.gamesService.Update(ctx, id, func(game *model.Game) (*model.GameSetter, error) {
+		if mask.Has("type") && gameTypeFromProto(request.GetGame().GetType()) != game.Type {
+			return nil, apperr.ImmutableField("game.type", "type")
+		}
+
+		setter := &model.GameSetter{}
+
+		if mask.Has("name_translations") {
+			translations, err := json.Marshal(request.GetGame().GetNameTranslations())
+
+			if err != nil {
+				return nil, fmt.Errorf("games: failed to encode name translations: %w", err)
+			}
+
+			setter.NameTranslations = omit.From(types.NewJSON(json.RawMessage(translations)))
+		}
+
+		return setter, nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("games: failed to update game %q: %w", request.GetGame().GetName(), err)
+	}
+
+	return gameToProto(game)
 }
 
 func (g *gamesApi) DeleteGame(ctx context.Context, request *ledgerv1.DeleteGameRequest) (*ledgerv1.Game, error) {
-	//TODO implement me
-	panic("implement me")
+	id, err := parseGameId(request.GetName())
+
+	if err != nil {
+		return nil, apperr.InvalidResourceName("name", err, request.GetName())
+	}
+
+	game, err := g.gamesService.Delete(ctx, id)
+
+	if err != nil {
+		return nil, fmt.Errorf("games: failed to delete game %q: %w", request.GetName(), err)
+	}
+
+	return gameToProto(game)
 }
 
 func (g *gamesApi) UndeleteGame(ctx context.Context, request *ledgerv1.UndeleteGameRequest) (*ledgerv1.Game, error) {
-	//TODO implement me
-	panic("implement me")
+	id, err := parseGameId(request.GetName())
+
+	if err != nil {
+		return nil, apperr.InvalidResourceName("name", err, request.GetName())
+	}
+
+	game, err := g.gamesService.Undelete(ctx, id)
+
+	if err != nil {
+		return nil, fmt.Errorf("games: failed to undelete game %q: %w", request.GetName(), err)
+	}
+
+	return gameToProto(game)
 }
 
 func gameToProto(row *model.Game) (*ledgerv1.Game, error) {
