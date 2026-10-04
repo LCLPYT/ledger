@@ -3,7 +3,7 @@ default:
 
 DB_DSN := "postgres://db:db@localhost:5432/db?sslmode=disable"
 
-check: fmt-check lint
+check: test fmt-check lint
 
 alias db-gen := bobgen
 
@@ -29,8 +29,17 @@ buf-gen:
 db:
     docker compose up -d --wait postgres
 
+test-db:
+    docker compose up -d --wait postgres_test
+
+test: test-db
+    go test ./...
+
 stop-db:
     docker compose down postgres
+
+stop-test-db:
+    docker compose down postgres_test
 
 reset-db: stop-db
     docker volume rm ledger_pgdata

@@ -32,7 +32,7 @@ func (g *gamesApi) GetGame(ctx context.Context, request *ledgerv1.GetGameRequest
 	id, err := parseGameId(request.GetName())
 
 	if err != nil {
-		return nil, fmt.Errorf("games: invalid game name: %w", err)
+		return nil, apperr.InvalidResourceName("name", err, request.GetName())
 	}
 
 	game, err := g.gamesService.GetById(ctx, id)
