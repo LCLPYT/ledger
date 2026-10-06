@@ -7,6 +7,7 @@ import (
 	"buf.build/go/protovalidate"
 	ledgerv1 "github.com/lclpyt/ledger/gen/go/apis/ledger/v1"
 	"github.com/lclpyt/ledger/internal/games"
+	"github.com/lclpyt/ledger/internal/playersettings"
 	"github.com/stephenafamo/bob"
 
 	"github.com/quadrubo/golib/app"
@@ -46,6 +47,10 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 	gamesService := games.NewService(db)
 
 	ledgerv1.RegisterGamesServiceServer(server, newGamesApi(gamesService, validator))
+
+	playerSettingsService := playersettings.NewService(db)
+
+	ledgerv1.RegisterPlayerSettingsServiceServer(server, newPlayerSettingsApi(playerSettingsService))
 
 	return nil
 }

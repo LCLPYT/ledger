@@ -17,4 +17,23 @@ extend buf.validate.StringRules {
       "  ? ''"
       "  : 'must be a valid ' + rule + ' resource name'"
   }];
+
+  // Player resource name, `players/{player}` where {player} is a lowercase UUIDv4.
+  bool player_name = 1001 [(buf.validate.predefined).cel = {
+    id: "string.player_name"
+    expression:
+      "!rule || this.matches('^players/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
+      "  ? ''"
+      "  : 'must be a valid players/* resource name with a lowercase UUIDv4 id'"
+  }];
+
+  // Player setting resource name, `players/{player}/settings/{setting}` where {player} is
+  // a lowercase UUIDv4 and {setting} a dot separated path of up to 16 segments.
+  bool player_setting_name = 1002 [(buf.validate.predefined).cel = {
+    id: "string.player_setting_name"
+    expression:
+      "!rule || this.matches('^players/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/settings/[a-z][a-z0-9_]{0,62}([.][a-z][a-z0-9_]{0,62}){0,15}$')"
+      "  ? ''"
+      "  : 'must be a valid players/*/settings/* resource name'"
+  }];
 }

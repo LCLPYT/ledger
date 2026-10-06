@@ -30,6 +30,22 @@ var file_apis_ledger_v1_rules_proto_extTypes = []protoimpl.ExtensionInfo{
 		Tag:           "bytes,1000,opt,name=resource_name",
 		Filename:      "apis/ledger/v1/rules.proto",
 	},
+	{
+		ExtendedType:  (*validate.StringRules)(nil),
+		ExtensionType: (*bool)(nil),
+		Field:         1001,
+		Name:          "apis.ledger.v1.player_name",
+		Tag:           "varint,1001,opt,name=player_name",
+		Filename:      "apis/ledger/v1/rules.proto",
+	},
+	{
+		ExtendedType:  (*validate.StringRules)(nil),
+		ExtensionType: (*bool)(nil),
+		Field:         1002,
+		Name:          "apis.ledger.v1.player_setting_name",
+		Tag:           "varint,1002,opt,name=player_setting_name",
+		Filename:      "apis/ledger/v1/rules.proto",
+	},
 }
 
 // Extension fields to validate.StringRules.
@@ -39,6 +55,15 @@ var (
 	//
 	// optional string resource_name = 1000;
 	E_ResourceName = &file_apis_ledger_v1_rules_proto_extTypes[0]
+	// Player resource name, `players/{player}` where {player} is a lowercase UUIDv4.
+	//
+	// optional bool player_name = 1001;
+	E_PlayerName = &file_apis_ledger_v1_rules_proto_extTypes[1]
+	// Player setting resource name, `players/{player}/settings/{setting}` where {player} is
+	// a lowercase UUIDv4 and {setting} a dot separated path of up to 16 segments.
+	//
+	// optional bool player_setting_name = 1002;
+	E_PlayerSettingName = &file_apis_ledger_v1_rules_proto_extTypes[2]
 )
 
 var File_apis_ledger_v1_rules_proto protoreflect.FileDescriptor
@@ -48,17 +73,26 @@ const file_apis_ledger_v1_rules_proto_rawDesc = "" +
 	"\x1aapis/ledger/v1/rules.proto\x12\x0eapis.ledger.v1\x1a\x1bbuf/validate/validate.proto:\xe6\x01\n" +
 	"\rresource_name\x12\x19.buf.validate.StringRules\x18\xe8\a \x01(\tB\xa4\x01\xc2H\xa0\x01\n" +
 	"\x9d\x01\n" +
-	"\x14string.resource_name\x1a\x84\x01this.matches('^' + rule.replace('*', '[a-z]([a-z0-9-]{0,61}[a-z0-9])?') + '$')  ? ''  : 'must be a valid ' + rule + ' resource name'R\fresourceNameB9Z7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\beditionsp\xe8\a"
+	"\x14string.resource_name\x1a\x84\x01this.matches('^' + rule.replace('*', '[a-z]([a-z0-9-]{0,61}[a-z0-9])?') + '$')  ? ''  : 'must be a valid ' + rule + ' resource name'R\fresourceName:\x90\x02\n" +
+	"\vplayer_name\x12\x19.buf.validate.StringRules\x18\xe9\a \x01(\bB\xd2\x01\xc2H\xce\x01\n" +
+	"\xcb\x01\n" +
+	"\x12string.player_name\x1a\xb4\x01!rule || this.matches('^players/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')  ? ''  : 'must be a valid players/* resource name with a lowercase UUIDv4 id'R\n" +
+	"playerName:\xd4\x02\n" +
+	"\x13player_setting_name\x12\x19.buf.validate.StringRules\x18\xea\a \x01(\bB\x87\x02\xc2H\x83\x02\n" +
+	"\x80\x02\n" +
+	"\x1astring.player_setting_name\x1a\xe1\x01!rule || this.matches('^players/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/settings/[a-z][a-z0-9_]{0,62}([.][a-z][a-z0-9_]{0,62}){0,15}$')  ? ''  : 'must be a valid players/*/settings/* resource name'R\x11playerSettingNameB9Z7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\beditionsp\xe8\a"
 
 var file_apis_ledger_v1_rules_proto_goTypes = []any{
 	(*validate.StringRules)(nil), // 0: buf.validate.StringRules
 }
 var file_apis_ledger_v1_rules_proto_depIdxs = []int32{
 	0, // 0: apis.ledger.v1.resource_name:extendee -> buf.validate.StringRules
-	1, // [1:1] is the sub-list for method output_type
-	1, // [1:1] is the sub-list for method input_type
-	1, // [1:1] is the sub-list for extension type_name
-	0, // [0:1] is the sub-list for extension extendee
+	0, // 1: apis.ledger.v1.player_name:extendee -> buf.validate.StringRules
+	0, // 2: apis.ledger.v1.player_setting_name:extendee -> buf.validate.StringRules
+	3, // [3:3] is the sub-list for method output_type
+	3, // [3:3] is the sub-list for method input_type
+	3, // [3:3] is the sub-list for extension type_name
+	0, // [0:3] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
 }
 
@@ -74,7 +108,7 @@ func file_apis_ledger_v1_rules_proto_init() {
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_apis_ledger_v1_rules_proto_rawDesc), len(file_apis_ledger_v1_rules_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   0,
-			NumExtensions: 1,
+			NumExtensions: 3,
 			NumServices:   0,
 		},
 		GoTypes:           file_apis_ledger_v1_rules_proto_goTypes,

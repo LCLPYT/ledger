@@ -37,9 +37,10 @@ const (
 )
 
 var (
-	suite  *testkit.Suite
-	db     bob.DB
-	client ledgerv1.GamesServiceClient
+	suite                *testkit.Suite
+	db                   bob.DB
+	client               ledgerv1.GamesServiceClient
+	playerSettingsClient ledgerv1.PlayerSettingsServiceClient
 )
 
 func TestV1(t *testing.T) {
@@ -125,6 +126,7 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 
 	db = do.MustInvoke[bob.DB](suite.Injector())
 	client = ledgerv1.NewGamesServiceClient(suite.Conn())
+	playerSettingsClient = ledgerv1.NewPlayerSettingsServiceClient(suite.Conn())
 })
 
 func newGame() *ledgerv1.Game {
