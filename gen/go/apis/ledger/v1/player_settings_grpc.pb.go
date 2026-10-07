@@ -30,10 +30,9 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// PlayerSettingsService manages arbitrary settings of players.
+// PlayerSettingsService manages arbitrary settings of players, managed by game servers.
 // Settings are organized as a tree by their dot separated path, e.g. "general.preferred_language".
-// Every setting is a leaf of that tree: a setting path must not be an ancestor or descendant of
-// another existing setting path of the same player.
+// Every setting is a leaf.
 type PlayerSettingsServiceClient interface {
 	// Get a single setting of a player.
 	GetPlayerSetting(ctx context.Context, in *GetPlayerSettingRequest, opts ...grpc.CallOption) (*PlayerSetting, error)
@@ -44,7 +43,7 @@ type PlayerSettingsServiceClient interface {
 	//
 	//	aip.dev/not-precedent: the request has no update_mask. --)
 	UpdatePlayerSetting(ctx context.Context, in *UpdatePlayerSettingRequest, opts ...grpc.CallOption) (*PlayerSetting, error)
-	// Permanently delete a setting.
+	// Reset a setting to the default value by deleting the player setting entry that serves as overwrite to the default.
 	DeletePlayerSetting(ctx context.Context, in *DeletePlayerSettingRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
@@ -100,10 +99,9 @@ func (c *playerSettingsServiceClient) DeletePlayerSetting(ctx context.Context, i
 // All implementations should embed UnimplementedPlayerSettingsServiceServer
 // for forward compatibility.
 //
-// PlayerSettingsService manages arbitrary settings of players.
+// PlayerSettingsService manages arbitrary settings of players, managed by game servers.
 // Settings are organized as a tree by their dot separated path, e.g. "general.preferred_language".
-// Every setting is a leaf of that tree: a setting path must not be an ancestor or descendant of
-// another existing setting path of the same player.
+// Every setting is a leaf.
 type PlayerSettingsServiceServer interface {
 	// Get a single setting of a player.
 	GetPlayerSetting(context.Context, *GetPlayerSettingRequest) (*PlayerSetting, error)
@@ -114,7 +112,7 @@ type PlayerSettingsServiceServer interface {
 	//
 	//	aip.dev/not-precedent: the request has no update_mask. --)
 	UpdatePlayerSetting(context.Context, *UpdatePlayerSettingRequest) (*PlayerSetting, error)
-	// Permanently delete a setting.
+	// Reset a setting to the default value by deleting the player setting entry that serves as overwrite to the default.
 	DeletePlayerSetting(context.Context, *DeletePlayerSettingRequest) (*emptypb.Empty, error)
 }
 

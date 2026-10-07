@@ -93,17 +93,15 @@ func (g *gamesApi) ListGames(ctx context.Context, request *ledgerv1.ListGamesReq
 }
 
 func (g *gamesApi) CreateGame(ctx context.Context, request *ledgerv1.CreateGameRequest) (*ledgerv1.Game, error) {
-	translations, err := json.Marshal(request.GetGame().GetNameTranslations())
+	setter, err := gameSetter(request.GetGame())
 
 	if err != nil {
-		return nil, fmt.Errorf("games: failed to encode name translations: %w", err)
+		return nil, err
 	}
 
-	game, err := g.gamesService.Create(ctx, &model.GameSetter{
-		ID:               omit.From(request.GetGameId()),
-		Type:             omit.From(gameTypeFromProto(request.GetGame().GetType())),
-		NameTranslations: omit.From(types.NewJSON(json.RawMessage(translations))),
-	})
+	setter.ID = omit.From(request.GetGameId())
+
+	game, err := g.gamesService.Create(ctx, setter)
 
 	if err != nil {
 		return nil, fmt.Errorf("games: failed to create game: %w", err)
@@ -129,7 +127,19 @@ func (g *gamesApi) UpdateGame(ctx context.Context, request *ledgerv1.UpdateGameR
 		return nil, err
 	}
 
-	game, err := g.gamesService.Update(ctx, id, func(game *model.Game) (*model.GameSetter, error) {
+	var create func() (*model.GameSetter, error)
+
+	if request.GetAllowMissing() {
+		create = func() (*model.GameSetter, error) {
+			if err := validate.Masked(g.validator, request.GetGame(), gameCreateMask, "game"); err != nil {
+				return nil, err
+			}
+
+			return gameSetter(request.GetGame())
+		}
+	}
+
+	game, err := g.gamesService.Upsert(ctx, id, create, func(game *model.Game) (*model.GameSetter, error) {
 		if mask.Has("type") && gameTypeFromProto(request.GetGame().GetType()) != game.Type {
 			return nil, apperr.ImmutableField("game.type", "type")
 		}
@@ -186,6 +196,21 @@ func (g *gamesApi) UndeleteGame(ctx context.Context, request *ledgerv1.UndeleteG
 	}
 
 	return gameToProto(game)
+}
+
+var gameCreateMask = fieldmask.Mask{"type": {}, "name_translations": {}}
+
+func gameSetter(game *ledgerv1.Game) (*model.GameSetter, error) {
+	translations, err := json.Marshal(game.GetNameTranslations())
+
+	if err != nil {
+		return nil, fmt.Errorf("games: failed to encode name translations: %w", err)
+	}
+
+	return &model.GameSetter{
+		Type:             omit.From(gameTypeFromProto(game.GetType())),
+		NameTranslations: omit.From(types.NewJSON(json.RawMessage(translations))),
+	}, nil
 }
 
 func gameToProto(row *model.Game) (*ledgerv1.Game, error) {

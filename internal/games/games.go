@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/aarondl/opt/omit"
 	"github.com/aarondl/opt/omitnull"
 	"github.com/lclpyt/ledger/gen/go/bob/model"
 	"github.com/quadrubo/golib/apperr"
@@ -127,12 +128,15 @@ func (s *Service) GetById(
 	return game, nil
 }
 
-func (s *Service) Update(
+// Upsert updates the game, or inserts the setter create returns when no game
+// carries the id. A nil create makes a missing game a NotFound.
+func (s *Service) Upsert(
 	ctx context.Context,
 	id string,
+	create func() (*model.GameSetter, error),
 	update func(game *model.Game) (*model.GameSetter, error),
 ) (*model.Game, error) {
-	return s.modify(ctx, id, func(game *model.Game) (*model.GameSetter, error) {
+	return s.write(ctx, id, create, func(game *model.Game) (*model.GameSetter, error) {
 		if game.DeleteTime.IsValue() {
 			return nil, apperr.Deleted("GAME_DELETED", ResourceType, Pattern.Format(id))
 		}
@@ -180,6 +184,15 @@ func (s *Service) modify(
 	id string,
 	modify func(game *model.Game) (*model.GameSetter, error),
 ) (*model.Game, error) {
+	return s.write(ctx, id, nil, modify)
+}
+
+func (s *Service) write(
+	ctx context.Context,
+	id string,
+	create func() (*model.GameSetter, error),
+	modify func(game *model.Game) (*model.GameSetter, error),
+) (*model.Game, error) {
 	var game *model.Game
 
 	err := s.db.RunInTx(ctx, nil, func(ctx context.Context, tx bob.Transaction) error {
@@ -190,7 +203,13 @@ func (s *Service) modify(
 
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
-				return apperr.NotFound("GAME_NOT_FOUND", ResourceType, Pattern.Format(id))
+				if create == nil {
+					return apperr.NotFound("GAME_NOT_FOUND", ResourceType, Pattern.Format(id))
+				}
+
+				game, err = insertMissing(ctx, tx, id, create)
+
+				return err
 			}
 
 			return fmt.Errorf("game service: failed to lock game: %w", err)
@@ -213,6 +232,33 @@ func (s *Service) modify(
 
 	if err != nil {
 		return nil, err
+	}
+
+	return game, nil
+}
+
+func insertMissing(
+	ctx context.Context,
+	tx bob.Transaction,
+	id string,
+	create func() (*model.GameSetter, error),
+) (*model.Game, error) {
+	setter, err := create()
+
+	if err != nil {
+		return nil, err
+	}
+
+	setter.ID = omit.From(id)
+
+	game, err := model.Games.Insert(setter).One(ctx, tx)
+
+	if err != nil {
+		if postgres.IsUniqueViolationOn(err, "games_pkey") {
+			return nil, apperr.ConcurrentUpdate(ResourceType, Pattern.Format(id))
+		}
+
+		return nil, fmt.Errorf("game service: failed to insert game: %w", err)
 	}
 
 	return game, nil

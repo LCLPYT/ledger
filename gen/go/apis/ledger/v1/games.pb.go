@@ -309,7 +309,11 @@ type UpdateGameRequest struct {
 	// Game info to update.
 	Game *Game `protobuf:"bytes,1,opt,name=game,proto3" json:"game,omitempty"`
 	// Fields to update. Omit to update all writable fields.
-	UpdateMask    *fieldmaskpb.FieldMask `protobuf:"bytes,2,opt,name=update_mask,json=updateMask,proto3" json:"update_mask,omitempty"`
+	UpdateMask *fieldmaskpb.FieldMask `protobuf:"bytes,2,opt,name=update_mask,json=updateMask,proto3" json:"update_mask,omitempty"`
+	// If true and the game does not exist, it is created under the id of
+	// `game.name`, as with CreateGame. In this case `update_mask` is ignored.
+	// A soft deleted game is not recreated and must be restored with UndeleteGame.
+	AllowMissing  bool `protobuf:"varint,3,opt,name=allow_missing,json=allowMissing,proto3" json:"allow_missing,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -356,6 +360,13 @@ func (x *UpdateGameRequest) GetUpdateMask() *fieldmaskpb.FieldMask {
 		return x.UpdateMask
 	}
 	return nil
+}
+
+func (x *UpdateGameRequest) GetAllowMissing() bool {
+	if x != nil {
+		return x.AllowMissing
+	}
+	return false
 }
 
 // Request message to delete a game.
@@ -575,11 +586,12 @@ const file_apis_ledger_v1_games_proto_rawDesc = "" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"\x8e\x01\n" +
 	"\x11CreateGameRequest\x123\n" +
 	"\x04game\x18\x01 \x01(\v2\x14.apis.ledger.v1.GameB\t\xe0A\x02\xbaH\x03\xc8\x01\x01R\x04game\x12D\n" +
-	"\agame_id\x18\x02 \x01(\tB+\xe0A\x02\xbaH%r#2!^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$R\x06gameId\"\xd6\x01\n" +
+	"\agame_id\x18\x02 \x01(\tB+\xe0A\x02\xbaH%r#2!^[a-z]([a-z0-9-]{0,61}[a-z0-9])?$R\x06gameId\"\x80\x02\n" +
 	"\x11UpdateGameRequest\x123\n" +
 	"\x04game\x18\x01 \x01(\v2\x14.apis.ledger.v1.GameB\t\xe0A\x02\xbaH\x03\xd8\x01\x03R\x04game\x12@\n" +
 	"\vupdate_mask\x18\x02 \x01(\v2\x1a.google.protobuf.FieldMaskB\x03\xe0A\x01R\n" +
-	"updateMask:J\xbaHG\x1aE\n" +
+	"updateMask\x12(\n" +
+	"\rallow_missing\x18\x03 \x01(\bB\x03\xe0A\x01R\fallowMissing:J\xbaHG\x1aE\n" +
 	"!update_game_request.game.required\x12\x10game is required\x1a\x0ehas(this.game)\"I\n" +
 	"\x11DeleteGameRequest\x124\n" +
 	"\x04name\x18\x01 \x01(\tB \xe0A\x02\xfaA\x1a\n" +

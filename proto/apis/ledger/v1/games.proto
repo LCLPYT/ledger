@@ -131,6 +131,10 @@ message UpdateGameRequest {
 
   // Fields to update. Omit to update all writable fields.
   google.protobuf.FieldMask update_mask = 2 [(google.api.field_behavior) = OPTIONAL];
+
+  // If true and the game does not exist, it is created (ignores the update mask).
+  // A soft deleted game will not be recreated and must be restored with UndeleteGame.
+  bool allow_missing = 3 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // Request message to delete a game.
