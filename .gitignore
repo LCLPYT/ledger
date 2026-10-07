@@ -2,5 +2,6 @@
 /ledger
 /coverage.out
 /config.local.yaml
+/data/
 
 .direnv

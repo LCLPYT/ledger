@@ -4,6 +4,7 @@ import (
 	apiv1 "github.com/lclpyt/ledger/internal/api/v1"
 	"github.com/lclpyt/ledger/internal/bob"
 	"github.com/lclpyt/ledger/internal/db/migrations"
+	"github.com/lclpyt/ledger/internal/maprepo"
 
 	"github.com/quadrubo/golib/app"
 	"github.com/quadrubo/golib/config"
@@ -53,5 +54,6 @@ func Serve(conf app.Module) []app.Module {
 			validate.Unary,
 		)),
 		apiv1.Module(),
+		maprepo.Module(),
 	)
 }
