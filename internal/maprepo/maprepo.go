@@ -5,10 +5,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/quadrubo/golib/app"
@@ -67,7 +69,7 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 
 	mux := http.NewServeMux()
 
-	mux.Handle("GET /v1/maps/", http.StripPrefix("/v1/maps/", http.FileServer(http.Dir(cfg.RootDir))))
+	mux.Handle("GET /v1/maps/", http.StripPrefix("/v1/maps/", http.FileServer(dotFileHidingFS{http.Dir(cfg.RootDir)})))
 
 	handler := m.withLogging(mux)
 
@@ -137,7 +139,7 @@ func (m *module) stop() {
 	defer cancel()
 
 	if err := m.server.Shutdown(ctx); err != nil {
-		m.log.Warn("shutdown completed with an error: %w, dropping still active requests", err)
+		m.log.Warn("shutdown completed with an error, dropping still active requests", slog.Any("error", err))
 		_ = m.server.Close()
 		return
 	}
@@ -178,4 +180,41 @@ func (r *statusRecorder) ReadFrom(src io.Reader) (int64, error) {
 
 func (r *statusRecorder) Unwrap() http.ResponseWriter {
 	return r.ResponseWriter
+}
+
+type dotFileHidingFS struct {
+	http.FileSystem
+}
+
+func (fsys dotFileHidingFS) Open(name string) (http.File, error) {
+	for part := range strings.SplitSeq(name, "/") {
+		if strings.HasPrefix(part, ".") {
+			return nil, fs.ErrNotExist
+		}
+	}
+
+	f, err := fsys.FileSystem.Open(name)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return dotFileHidingFile{f}, nil
+}
+
+type dotFileHidingFile struct {
+	http.File
+}
+
+func (f dotFileHidingFile) Readdir(n int) ([]fs.FileInfo, error) {
+	entries, err := f.File.Readdir(n)
+	visible := entries[:0]
+
+	for _, entry := range entries {
+		if !strings.HasPrefix(entry.Name(), ".") {
+			visible = append(visible, entry)
+		}
+	}
+
+	return visible, err
 }

@@ -72,7 +72,10 @@ fmt-check:
     fi
     cd proto && buf format --diff --exit-code
 
-lint: lint-go lint-proto
+lint: lint-go lint-proto vet
+
+vet:
+    go vet ./...
 
 # golangci-lint runs govet
 lint-go:
