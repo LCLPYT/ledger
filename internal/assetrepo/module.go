@@ -1,16 +1,13 @@
-package maprepo
+package assetrepo
 
 import (
 	"context"
 	"errors"
 	"fmt"
 	"io"
-	"io/fs"
 	"log/slog"
 	"net"
 	"net/http"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/quadrubo/golib/app"
@@ -19,7 +16,7 @@ import (
 	"github.com/samber/do/v2"
 )
 
-const configKey = "modules.map_repo"
+const configKey = "modules.asset_repo"
 
 func Module() app.Module {
 	return &module{}
@@ -34,60 +31,74 @@ type module struct {
 
 type Config struct {
 	Addr        string        `config:"addr" validate:"required"`
-	RootDir     string        `config:"root_dir" validate:"required"`
+	ConfigFile  string        `config:"config_file" validate:"required"`
 	GracePeriod time.Duration `config:"grace_period" validate:"required"`
 }
 
 func (m *module) Name() string {
-	return "map_repo"
+	return "asset_repo"
 }
 
 func (m *module) Provide(_ context.Context, i do.Injector) error {
-	cfg, err := config.Load(i, m.Name(), configKey, Config{
+	log, err := logging.Component(i, m.Name())
+
+	if err != nil {
+		return fmt.Errorf("asset_repo: failed to inject logger: %w", err)
+	}
+
+	m.log = log
+
+	m.cfg, err = config.Load(i, m.Name(), configKey, Config{
 		Addr:        ":8080",
-		RootDir:     "./data/maps",
 		GracePeriod: 5 * time.Second,
 	})
 
 	if err != nil {
-		return fmt.Errorf("map_repo: failed to load config: %w", err)
+		return fmt.Errorf("asset_repo: failed to load config: %w", err)
 	}
 
-	m.cfg = cfg
-
-	if info, err := os.Stat(cfg.RootDir); err != nil {
-		return fmt.Errorf("map_repo: failed to access root_dir: %w", err)
-	} else if !info.IsDir() {
-		return fmt.Errorf("map_repo: root_dir %s is not a directory", cfg.RootDir)
-	}
-
-	m.log, err = logging.Component(i, m.Name())
+	cfg, err := ReadConfig(m.cfg.ConfigFile)
 
 	if err != nil {
-		return fmt.Errorf("map_repo: failed to inject logger: %w", err)
+		return err
 	}
 
 	mux := http.NewServeMux()
 
-	mux.Handle("GET /v1/maps/", http.StripPrefix("/v1/maps/", http.FileServer(dotFileHidingFS{http.Dir(cfg.RootDir)})))
+	rootRoute := "/v1/assets"
+
+	for _, repo := range cfg.Repos {
+		fsys, err := repo.FileSystem()
+
+		if err != nil {
+			return fmt.Errorf("asset_repo: failed to serve asset repo %s: %w", repo.Id, err)
+		}
+
+		prefix := fmt.Sprintf("%s/%s/", rootRoute, repo.Id)
+
+		mux.Handle(fmt.Sprintf("GET %s", prefix), http.StripPrefix(prefix, http.FileServer(fsys)))
+
+		log.Info(fmt.Sprintf("serving asset repo %s from %s", repo.Id, repo.Path),
+			slog.Bool("public", repo.Public))
+	}
 
 	handler := m.withLogging(mux)
 
 	budget, err := do.Invoke[app.DrainBudget](i)
 
 	if err != nil {
-		return fmt.Errorf("map_repo: failed to inject the drain budget: %w", err)
+		return fmt.Errorf("asset_repo: failed to inject the drain budget: %w", err)
 	}
 
-	if cfg.GracePeriod >= time.Duration(budget) {
-		return fmt.Errorf("map_repo: grace_period of %s has to be less than the %s drain budget",
-			cfg.GracePeriod, budget)
+	if m.cfg.GracePeriod >= time.Duration(budget) {
+		return fmt.Errorf("asset_repo: grace_period of %s has to be less than the %s drain budget",
+			m.cfg.GracePeriod, budget)
 	}
 
-	m.lis, err = net.Listen("tcp", cfg.Addr)
+	m.lis, err = net.Listen("tcp", m.cfg.Addr)
 
 	if err != nil {
-		return fmt.Errorf("map_repo: failed to listen on %s: %w", cfg.Addr, err)
+		return fmt.Errorf("asset_repo: failed to listen on %s: %w", m.cfg.Addr, err)
 	}
 
 	m.server = &http.Server{
@@ -109,8 +120,7 @@ func (m *module) Stop(context.Context) error {
 }
 
 func (m *module) Run(ctx context.Context) error {
-	m.log.Info("serving map repo", slog.String("addr", m.lis.Addr().String()),
-		slog.String("root_dir", m.cfg.RootDir))
+	m.log.Info("serving asset repos", slog.String("addr", m.lis.Addr().String()))
 
 	serveErr := make(chan error, 1)
 	go func() {
@@ -120,7 +130,7 @@ func (m *module) Run(ctx context.Context) error {
 	select {
 	case err := <-serveErr:
 		if err != nil && !errors.Is(err, http.ErrServerClosed) {
-			return fmt.Errorf("map_repo: failed to serve: %w", err)
+			return fmt.Errorf("asset_repo: failed to serve: %w", err)
 		}
 		return nil
 	case <-ctx.Done():
@@ -180,41 +190,4 @@ func (r *statusRecorder) ReadFrom(src io.Reader) (int64, error) {
 
 func (r *statusRecorder) Unwrap() http.ResponseWriter {
 	return r.ResponseWriter
-}
-
-type dotFileHidingFS struct {
-	http.FileSystem
-}
-
-func (fsys dotFileHidingFS) Open(name string) (http.File, error) {
-	for part := range strings.SplitSeq(name, "/") {
-		if strings.HasPrefix(part, ".") {
-			return nil, fs.ErrNotExist
-		}
-	}
-
-	f, err := fsys.FileSystem.Open(name)
-
-	if err != nil {
-		return nil, err
-	}
-
-	return dotFileHidingFile{f}, nil
-}
-
-type dotFileHidingFile struct {
-	http.File
-}
-
-func (f dotFileHidingFile) Readdir(n int) ([]fs.FileInfo, error) {
-	entries, err := f.File.Readdir(n)
-	visible := entries[:0]
-
-	for _, entry := range entries {
-		if !strings.HasPrefix(entry.Name(), ".") {
-			visible = append(visible, entry)
-		}
-	}
-
-	return visible, err
 }
