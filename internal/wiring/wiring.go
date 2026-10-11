@@ -3,6 +3,7 @@ package wiring
 import (
 	apiv1 "github.com/lclpyt/ledger/internal/api/v1"
 	"github.com/lclpyt/ledger/internal/assetrepo"
+	"github.com/lclpyt/ledger/internal/auth"
 	"github.com/lclpyt/ledger/internal/bob"
 	"github.com/lclpyt/ledger/internal/db/migrations"
 
@@ -48,9 +49,11 @@ func Serve(conf app.Module) []app.Module {
 		Migrate(conf),
 		grpcerr.Module(),
 		validate.Module(),
+		auth.Module(),
 		grpcserver.Module(grpcserver.WithUnaryInterceptors(
 			recovery.Unary,
 			errmap.Unary,
+			auth.Unary(apiv1.MethodPermissions),
 			validate.Unary,
 		)),
 		apiv1.Module(),

@@ -14,6 +14,10 @@ type AssetRepo struct {
 	Public bool   `yaml:"public"`
 }
 
+func (r *AssetRepo) ReadPermission() string {
+	return "assets.read:" + r.Id
+}
+
 func (r *AssetRepo) FileSystem() (http.FileSystem, error) {
 	err := r.CheckPath()
 

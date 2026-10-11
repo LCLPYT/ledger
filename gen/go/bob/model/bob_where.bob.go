@@ -17,17 +17,29 @@ var (
 )
 
 func Where[Q psql.Filterable]() struct {
-	Games          gameWhere[Q]
-	PlayerSettings playerSettingWhere[Q]
-	Users          userWhere[Q]
+	APIKeyRoles     apiKeyRoleWhere[Q]
+	APIKeys         apiKeyWhere[Q]
+	Games           gameWhere[Q]
+	PlayerSettings  playerSettingWhere[Q]
+	RolePermissions rolePermissionWhere[Q]
+	Roles           roleWhere[Q]
+	Users           userWhere[Q]
 } {
 	return struct {
-		Games          gameWhere[Q]
-		PlayerSettings playerSettingWhere[Q]
-		Users          userWhere[Q]
+		APIKeyRoles     apiKeyRoleWhere[Q]
+		APIKeys         apiKeyWhere[Q]
+		Games           gameWhere[Q]
+		PlayerSettings  playerSettingWhere[Q]
+		RolePermissions rolePermissionWhere[Q]
+		Roles           roleWhere[Q]
+		Users           userWhere[Q]
 	}{
-		Games:          buildGameWhere[Q](Games.Columns),
-		PlayerSettings: buildPlayerSettingWhere[Q](PlayerSettings.Columns),
-		Users:          buildUserWhere[Q](Users.Columns),
+		APIKeyRoles:     buildAPIKeyRoleWhere[Q](APIKeyRoles.Columns),
+		APIKeys:         buildAPIKeyWhere[Q](APIKeys.Columns),
+		Games:           buildGameWhere[Q](Games.Columns),
+		PlayerSettings:  buildPlayerSettingWhere[Q](PlayerSettings.Columns),
+		RolePermissions: buildRolePermissionWhere[Q](RolePermissions.Columns),
+		Roles:           buildRoleWhere[Q](Roles.Columns),
+		Users:           buildUserWhere[Q](Users.Columns),
 	}
 }

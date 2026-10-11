@@ -16,10 +16,20 @@ import (
 
 var Preload = getPreloaders()
 
-type preloaders struct{}
+type preloaders struct {
+	APIKeyRole     apiKeyRolePreloader
+	APIKey         apiKeyPreloader
+	RolePermission rolePermissionPreloader
+	Role           rolePreloader
+}
 
 func getPreloaders() preloaders {
-	return preloaders{}
+	return preloaders{
+		APIKeyRole:     buildAPIKeyRolePreloader(),
+		APIKey:         buildAPIKeyPreloader(),
+		RolePermission: buildRolePermissionPreloader(),
+		Role:           buildRolePreloader(),
+	}
 }
 
 var (
@@ -28,10 +38,20 @@ var (
 	UpdateThenLoad = getThenLoaders[*dialect.UpdateQuery]()
 )
 
-type thenLoaders[Q orm.Loadable] struct{}
+type thenLoaders[Q orm.Loadable] struct {
+	APIKeyRole     apiKeyRoleThenLoader[Q]
+	APIKey         apiKeyThenLoader[Q]
+	RolePermission rolePermissionThenLoader[Q]
+	Role           roleThenLoader[Q]
+}
 
 func getThenLoaders[Q orm.Loadable]() thenLoaders[Q] {
-	return thenLoaders[Q]{}
+	return thenLoaders[Q]{
+		APIKeyRole:     buildAPIKeyRoleThenLoader[Q](),
+		APIKey:         buildAPIKeyThenLoader[Q](),
+		RolePermission: buildRolePermissionThenLoader[Q](),
+		Role:           buildRoleThenLoader[Q](),
+	}
 }
 
 func thenLoadBuilder[Q orm.Loadable, T any](name string, f func(context.Context, bob.Executor, T, ...bob.Mod[*dialect.SelectQuery]) error) func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q] {

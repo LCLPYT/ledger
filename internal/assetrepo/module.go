@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/lclpyt/ledger/internal/auth"
 	"github.com/quadrubo/golib/app"
 	"github.com/quadrubo/golib/config"
 	"github.com/quadrubo/golib/logging"
@@ -63,6 +64,12 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 		return err
 	}
 
+	authenticator, err := do.Invoke[*auth.Authenticator](i)
+
+	if err != nil {
+		return fmt.Errorf("asset_repo: failed to inject the authenticator: %w", err)
+	}
+
 	mux := http.NewServeMux()
 
 	rootRoute := "/v1/assets"
@@ -76,7 +83,13 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 
 		prefix := fmt.Sprintf("%s/%s/", rootRoute, repo.Id)
 
-		mux.Handle(fmt.Sprintf("GET %s", prefix), http.StripPrefix(prefix, http.FileServer(fsys)))
+		files := http.StripPrefix(prefix, http.FileServer(fsys))
+
+		if !repo.Public {
+			files = auth.RequireHTTP(authenticator, log, repo.ReadPermission(), files)
+		}
+
+		mux.Handle(fmt.Sprintf("GET %s", prefix), files)
 
 		log.Info(fmt.Sprintf("serving asset repo %s from %s", repo.Id, repo.Path),
 			slog.Bool("public", repo.Public))

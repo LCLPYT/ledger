@@ -20,16 +20,28 @@ var (
 	InsertThenLoadCount = getThenLoadCount[*dialect.InsertQuery]()
 )
 
-type preloadCounts struct{}
-
-func getPreloadCount() preloadCounts {
-	return preloadCounts{}
+type preloadCounts struct {
+	APIKey apiKeyCountPreloader
+	Role   roleCountPreloader
 }
 
-type thenLoadCounts[Q orm.Loadable] struct{}
+func getPreloadCount() preloadCounts {
+	return preloadCounts{
+		APIKey: buildAPIKeyCountPreloader(),
+		Role:   buildRoleCountPreloader(),
+	}
+}
+
+type thenLoadCounts[Q orm.Loadable] struct {
+	APIKey apiKeyCountThenLoader[Q]
+	Role   roleCountThenLoader[Q]
+}
 
 func getThenLoadCount[Q orm.Loadable]() thenLoadCounts[Q] {
-	return thenLoadCounts[Q]{}
+	return thenLoadCounts[Q]{
+		APIKey: buildAPIKeyCountThenLoader[Q](),
+		Role:   buildRoleCountThenLoader[Q](),
+	}
 }
 
 func countThenLoadBuilder[Q orm.Loadable, T any](name string, f func(context.Context, bob.Executor, T, ...bob.Mod[*dialect.SelectQuery]) error) func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q] {

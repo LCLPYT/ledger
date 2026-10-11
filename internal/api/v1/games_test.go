@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -107,6 +109,19 @@ func (d *testDatabase) Settings() map[string]any {
 	}
 }
 
+// TODO remove dependency of serving asset repo module in games api tests
+func writeAssetRepoConfig() string {
+	GinkgoHelper()
+
+	dir := GinkgoT().TempDir()
+	Expect(os.Mkdir(filepath.Join(dir, "maps"), 0o755)).To(Succeed())
+
+	path := filepath.Join(dir, "repos.yaml")
+	Expect(os.WriteFile(path, []byte("repos:\n  - id: maps\n    path: maps\n"), 0o600)).To(Succeed())
+
+	return path
+}
+
 var _ = BeforeSuite(func(ctx SpecContext) {
 	var err error
 
@@ -117,6 +132,10 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 			"modules": map[string]any{
 				"grpcerr": map[string]any{"domain": errorDomain},
 				"logging": map[string]any{"level": "error"},
+				"asset_repo": map[string]any{
+					"addr":        "127.0.0.1:0",
+					"config_file": writeAssetRepoConfig(),
+				},
 			},
 		},
 	})
@@ -125,8 +144,10 @@ var _ = BeforeSuite(func(ctx SpecContext) {
 	DeferCleanup(func() { Expect(suite.Stop()).To(Succeed()) })
 
 	db = do.MustInvoke[bob.DB](suite.Injector())
-	client = ledgerv1.NewGamesServiceClient(suite.Conn())
-	playerSettingsClient = ledgerv1.NewPlayerSettingsServiceClient(suite.Conn())
+
+	conn := authedConn(createAPIKey(ctx, "*"))
+	client = ledgerv1.NewGamesServiceClient(conn)
+	playerSettingsClient = ledgerv1.NewPlayerSettingsServiceClient(conn)
 })
 
 func newGame() *ledgerv1.Game {
