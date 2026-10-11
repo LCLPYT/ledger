@@ -35,7 +35,8 @@ var (
 	)
 )
 
-// TODO check if gRPC reflection is affected by auth and if it should or not
+// gRPC reflection is unaffected by auth currently.
+// It is intended to be turned off in prod.
 
 // Unary returns an interceptor that authenticates a call and checks the permission its method requires.
 func Unary(permissions MethodPermissions) grpcserver.UnaryInterceptor {

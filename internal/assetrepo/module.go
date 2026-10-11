@@ -24,15 +24,16 @@ func Module() app.Module {
 }
 
 type module struct {
-	lis    net.Listener
-	server *http.Server
-	log    *slog.Logger
-	cfg    Config
+	enabled bool
+	lis     net.Listener
+	server  *http.Server
+	log     *slog.Logger
+	cfg     Config
 }
 
 type Config struct {
 	Addr        string        `config:"addr" validate:"required"`
-	ConfigFile  string        `config:"config_file" validate:"required"`
+	ConfigFile  string        `config:"config_file"`
 	GracePeriod time.Duration `config:"grace_period" validate:"required"`
 }
 
@@ -51,6 +52,7 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 
 	m.cfg, err = config.Load(i, m.Name(), configKey, Config{
 		Addr:        ":8080",
+		ConfigFile:  "",
 		GracePeriod: 5 * time.Second,
 	})
 
@@ -58,11 +60,19 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 		return fmt.Errorf("asset_repo: failed to load config: %w", err)
 	}
 
+	if m.cfg.ConfigFile == "" {
+		m.enabled = false
+		log.Info("asset_repo: no config was given, disabling feature")
+		return nil
+	}
+
 	cfg, err := ReadConfig(m.cfg.ConfigFile)
 
 	if err != nil {
 		return err
 	}
+
+	log.Debug("asset repo config read successfully", slog.Int("repositories", len(cfg.Repos)))
 
 	authenticator, err := do.Invoke[*auth.Authenticator](i)
 
@@ -91,7 +101,7 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 
 		mux.Handle(fmt.Sprintf("GET %s", prefix), files)
 
-		log.Info(fmt.Sprintf("serving asset repo %s from %s", repo.Id, repo.Path),
+		log.Info("serving asset repo", slog.String("id", repo.Id), slog.String("path", repo.Path),
 			slog.Bool("public", repo.Public))
 	}
 
@@ -107,6 +117,8 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 		return fmt.Errorf("asset_repo: grace_period of %s has to be less than the %s drain budget",
 			m.cfg.GracePeriod, budget)
 	}
+
+	m.enabled = true
 
 	m.lis, err = net.Listen("tcp", m.cfg.Addr)
 
@@ -126,6 +138,10 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 }
 
 func (m *module) Stop(context.Context) error {
+	if !m.enabled {
+		return nil
+	}
+
 	_ = m.server.Close()
 	_ = m.lis.Close()
 
@@ -133,6 +149,11 @@ func (m *module) Stop(context.Context) error {
 }
 
 func (m *module) Run(ctx context.Context) error {
+	if !m.enabled {
+		<-ctx.Done()
+		return nil
+	}
+
 	m.log.Info("serving asset repos", slog.String("addr", m.lis.Addr().String()))
 
 	serveErr := make(chan error, 1)
