@@ -18,6 +18,7 @@ var Preload = getPreloaders()
 
 type preloaders struct {
 	APIKeyRole     apiKeyRolePreloader
+	APIKeyScope    apiKeyScopePreloader
 	APIKey         apiKeyPreloader
 	RolePermission rolePermissionPreloader
 	Role           rolePreloader
@@ -26,6 +27,7 @@ type preloaders struct {
 func getPreloaders() preloaders {
 	return preloaders{
 		APIKeyRole:     buildAPIKeyRolePreloader(),
+		APIKeyScope:    buildAPIKeyScopePreloader(),
 		APIKey:         buildAPIKeyPreloader(),
 		RolePermission: buildRolePermissionPreloader(),
 		Role:           buildRolePreloader(),
@@ -40,6 +42,7 @@ var (
 
 type thenLoaders[Q orm.Loadable] struct {
 	APIKeyRole     apiKeyRoleThenLoader[Q]
+	APIKeyScope    apiKeyScopeThenLoader[Q]
 	APIKey         apiKeyThenLoader[Q]
 	RolePermission rolePermissionThenLoader[Q]
 	Role           roleThenLoader[Q]
@@ -48,6 +51,7 @@ type thenLoaders[Q orm.Loadable] struct {
 func getThenLoaders[Q orm.Loadable]() thenLoaders[Q] {
 	return thenLoaders[Q]{
 		APIKeyRole:     buildAPIKeyRoleThenLoader[Q](),
+		APIKeyScope:    buildAPIKeyScopeThenLoader[Q](),
 		APIKey:         buildAPIKeyThenLoader[Q](),
 		RolePermission: buildRolePermissionThenLoader[Q](),
 		Role:           buildRoleThenLoader[Q](),

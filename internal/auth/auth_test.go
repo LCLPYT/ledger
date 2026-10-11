@@ -102,4 +102,19 @@ var _ = Describe("Principal", func() {
 	It("can do nothing without permissions", func() {
 		Expect((&auth.Principal{}).Can("games.read")).To(BeFalse())
 	})
+
+	It("can only do what its scopes cover", func() {
+		p := &auth.Principal{Permissions: []string{"*"}, Scopes: []string{"games.read", "assets.*"}}
+
+		Expect(p.Can("games.read")).To(BeTrue())
+		Expect(p.Can("assets.write:maps")).To(BeTrue())
+		Expect(p.Can("games.write")).To(BeFalse())
+	})
+
+	It("cannot do what its scopes cover but its permissions do not", func() {
+		p := &auth.Principal{Permissions: []string{"assets.read:*"}, Scopes: []string{"assets.*"}}
+
+		Expect(p.Can("assets.read:maps")).To(BeTrue())
+		Expect(p.Can("assets.write:maps")).To(BeFalse())
+	})
 })

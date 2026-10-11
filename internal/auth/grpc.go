@@ -61,7 +61,6 @@ func Unary(loadPermissions func() (MethodPermissions, error)) grpcserver.UnaryIn
 		}
 
 		return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, next grpc.UnaryHandler) (any, error) {
-			// TODO maybe solve health check missing permission mapping otherwise? e.g. no permission = public?
 			if strings.HasPrefix(info.FullMethod, healthServicePrefix) {
 				return next(ctx, req)
 			}

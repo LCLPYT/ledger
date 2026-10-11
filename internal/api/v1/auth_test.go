@@ -91,6 +91,20 @@ func createAPIKeyWith(ctx context.Context, setter *model.APIKeySetter, permissio
 	return token
 }
 
+func scopeAPIKey(ctx context.Context, token string, scopes ...string) {
+	GinkgoHelper()
+
+	id, _, _ := auth.ParseToken(token)
+
+	for _, scope := range scopes {
+		_, err := model.APIKeyScopes.Insert(&model.APIKeyScopeSetter{
+			APIKeyID:   omit.From(id),
+			Permission: omit.From(scope),
+		}).One(ctx, db)
+		Expect(err).ToNot(HaveOccurred())
+	}
+}
+
 func listGamesWith(ctx context.Context, conn *grpc.ClientConn) error {
 	_, err := ledgerv1.NewGamesServiceClient(conn).ListGames(ctx, &ledgerv1.ListGamesRequest{})
 
@@ -202,6 +216,28 @@ var _ = Describe("Authentication", func() {
 			})
 
 			Expect(err).ToNot(HaveOccurred())
+		})
+
+		It("denies a call outside the scopes of a key", func(ctx SpecContext) {
+			token := createAPIKey(ctx, "games.*")
+			scopeAPIKey(ctx, token, "games.read")
+			conn := authedConn(token)
+
+			Expect(listGamesWith(ctx, conn)).To(Succeed())
+
+			_, err := ledgerv1.NewGamesServiceClient(conn).CreateGame(ctx, &ledgerv1.CreateGameRequest{Game: newGame()})
+
+			Expect(status.Code(err)).To(Equal(codes.PermissionDenied))
+			Expect(err).To(HaveReason("MISSING_PERMISSION"))
+		})
+
+		It("denies a call the scopes of a key cover but its roles do not", func(ctx SpecContext) {
+			token := createAPIKey(ctx, "player_settings.read")
+			scopeAPIKey(ctx, token, "*")
+
+			err := listGamesWith(ctx, authedConn(token))
+
+			Expect(err).To(HaveReason("MISSING_PERMISSION"))
 		})
 
 		It("records when a key was last used", func(ctx SpecContext) {

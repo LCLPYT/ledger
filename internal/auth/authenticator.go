@@ -83,10 +83,16 @@ func (a *Authenticator) Authenticate(ctx context.Context, token string) (*Princi
 		}
 	}
 
-	permissions, err := a.permissions(ctx, id)
+	permissions, err := queries.ApiKeyPermissions(id).All(ctx, a.db)
 
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("auth: failed to load the permissions of api key %s: %w", id, err)
+	}
+
+	scopes, err := queries.ApiKeyScopes(id).All(ctx, a.db)
+
+	if err != nil {
+		return nil, fmt.Errorf("auth: failed to load the scopes of api key %s: %w", id, err)
 	}
 
 	if err := key.Update(ctx, a.db, &model.APIKeySetter{LastUsedTime: omitnull.From(now)}); err != nil {
@@ -97,6 +103,7 @@ func (a *Authenticator) Authenticate(ctx context.Context, token string) (*Princi
 		KeyID:       id,
 		Name:        key.Name,
 		Permissions: permissions,
+		Scopes:      scopes,
 	}
 
 	a.mu.Lock()
@@ -133,14 +140,4 @@ func (a *Authenticator) cached(id uuid.UUID, hash []byte, now time.Time) (*Princ
 	}
 
 	return entry.principal, true
-}
-
-func (a *Authenticator) permissions(ctx context.Context, id uuid.UUID) ([]string, error) {
-	permissions, err := queries.ApiKeyPermissions(id).All(ctx, a.db)
-
-	if err != nil {
-		return nil, fmt.Errorf("auth: failed to load the permissions of api key %s: %w", id, err)
-	}
-
-	return permissions, nil
 }

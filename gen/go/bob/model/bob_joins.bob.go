@@ -31,6 +31,7 @@ func (j joinSet[Q]) AliasedAs(alias string) joinSet[Q] {
 
 type joins[Q dialect.Joinable] struct {
 	APIKeyRoles     joinSet[apiKeyRoleJoins[Q]]
+	APIKeyScopes    joinSet[apiKeyScopeJoins[Q]]
 	APIKeys         joinSet[apiKeyJoins[Q]]
 	RolePermissions joinSet[rolePermissionJoins[Q]]
 	Roles           joinSet[roleJoins[Q]]
@@ -47,6 +48,7 @@ func buildJoinSet[Q interface{ aliasedAs(string) Q }, C any, F func(C, string) Q
 func getJoins[Q dialect.Joinable]() joins[Q] {
 	return joins[Q]{
 		APIKeyRoles:     buildJoinSet[apiKeyRoleJoins[Q]](APIKeyRoles.Columns, buildAPIKeyRoleJoins),
+		APIKeyScopes:    buildJoinSet[apiKeyScopeJoins[Q]](APIKeyScopes.Columns, buildAPIKeyScopeJoins),
 		APIKeys:         buildJoinSet[apiKeyJoins[Q]](APIKeys.Columns, buildAPIKeyJoins),
 		RolePermissions: buildJoinSet[rolePermissionJoins[Q]](RolePermissions.Columns, buildRolePermissionJoins),
 		Roles:           buildJoinSet[roleJoins[Q]](Roles.Columns, buildRoleJoins),

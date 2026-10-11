@@ -84,3 +84,67 @@ func (o apiKeyPermissions) subExpr(from, to int) bob.Expression {
 func (o apiKeyPermissions) WriteSQL(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 	return o.subExpr(0, len(apiKeyPermissionsSQL)).WriteSQL(ctx, w, d, start)
 }
+
+var apiKeyScopesSQL = formattedQueries_auth[306:365]
+
+type ApiKeyScopesQuery = orm.ModQuery[*dialect.SelectQuery, apiKeyScopes, string, []string, apiKeyScopesTransformer]
+
+func ApiKeyScopes(APIKeyID uuid.UUID) *ApiKeyScopesQuery {
+	var expressionTypArgs apiKeyScopes
+
+	expressionTypArgs.APIKeyID = psql.Arg(APIKeyID)
+
+	return &ApiKeyScopesQuery{
+		Query: orm.Query[apiKeyScopes, string, []string, apiKeyScopesTransformer]{
+			ExecQuery: orm.ExecQuery[apiKeyScopes]{
+				BaseQuery: bob.BaseQuery[apiKeyScopes]{
+					Expression: expressionTypArgs,
+					Dialect:    dialect.Dialect,
+					QueryType:  bob.QueryTypeSelect,
+				},
+			},
+			Scanner: scan.ColumnMapper[string]("permission"),
+		},
+		Mod: bob.ModFunc[*dialect.SelectQuery](func(q *dialect.SelectQuery) {
+			q.AppendSelect(expressionTypArgs.subExpr(7, 17))
+			q.SetTable(expressionTypArgs.subExpr(23, 37))
+			q.AppendWhere(expressionTypArgs.subExpr(44, 59))
+		}),
+		Build: psql.Select,
+	}
+}
+
+type ApiKeyScopesRow = struct {
+	Permission string `db:"permission"`
+}
+
+type apiKeyScopesTransformer = bob.SliceTransformer[string, []string]
+
+type apiKeyScopes struct {
+	APIKeyID bob.Expression
+}
+
+func (o apiKeyScopes) args() iter.Seq[orm.ArgWithPosition] {
+	return func(yield func(arg orm.ArgWithPosition) bool) {
+		if !yield(orm.ArgWithPosition{
+			Name:       "apiKeyID",
+			Start:      57,
+			Stop:       59,
+			Expression: o.APIKeyID,
+		}) {
+			return
+		}
+	}
+}
+
+func (o apiKeyScopes) raw(from, to int) string {
+	return apiKeyScopesSQL[from:to]
+}
+
+func (o apiKeyScopes) subExpr(from, to int) bob.Expression {
+	return orm.ArgsToExpression(apiKeyScopesSQL, from, to, o.args())
+}
+
+func (o apiKeyScopes) WriteSQL(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+	return o.subExpr(0, len(apiKeyScopesSQL)).WriteSQL(ctx, w, d, start)
+}

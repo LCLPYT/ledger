@@ -7,15 +7,21 @@ import (
 )
 
 // Principal is the authenticated caller of a request.
+// Scopes narrow the permissions down further, no scopes = unrestricted.
 type Principal struct {
 	KeyID       uuid.UUID
 	Name        string
 	Permissions []string
+	Scopes      []string
 }
 
 func (p *Principal) Can(permission string) bool {
-	for _, granted := range p.Permissions {
-		if Grants(granted, permission) {
+	return grantsAny(p.Permissions, permission) && (len(p.Scopes) == 0 || grantsAny(p.Scopes, permission))
+}
+
+func grantsAny(granted []string, required string) bool {
+	for _, g := range granted {
+		if Grants(g, required) {
 			return true
 		}
 	}

@@ -55,7 +55,8 @@ type APIKeysQuery = *psql.ViewQuery[*APIKey, APIKeySlice]
 
 // apiKeyR is where relationships are stored.
 type apiKeyR struct {
-	Roles RoleSlice // api_key_roles.api_key_roles_api_key_id_fkeyapi_key_roles.api_key_roles_role_name_fkey
+	Roles        RoleSlice        // api_key_roles.api_key_roles_api_key_id_fkeyapi_key_roles.api_key_roles_role_name_fkey
+	APIKeyScopes APIKeyScopeSlice // api_key_scopes.api_key_scopes_api_key_id_fkey
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -64,7 +65,8 @@ type apiKeyR struct {
 
 // apiKeyRLoaded tracks which relationships on APIKey have been loaded.
 type apiKeyRLoaded struct {
-	Roles bool // api_key_roles.api_key_roles_api_key_id_fkeyapi_key_roles.api_key_roles_role_name_fkey
+	Roles        bool // api_key_roles.api_key_roles_api_key_id_fkeyapi_key_roles.api_key_roles_role_name_fkey
+	APIKeyScopes bool // api_key_scopes.api_key_scopes_api_key_id_fkey
 }
 
 func buildAPIKeyColumns(tableName string) apiKeyColumns {
@@ -633,6 +635,29 @@ func (os APIKeySlice) Roles(mods ...bob.Mod[*dialect.SelectQuery]) RolesQuery {
 	)...)
 }
 
+// APIKeyScopes starts a query for related objects on api_key_scopes
+func (o *APIKey) APIKeyScopes(mods ...bob.Mod[*dialect.SelectQuery]) APIKeyScopesQuery {
+	return APIKeyScopes.Query(append(mods,
+		sm.Where(APIKeyScopes.Columns.APIKeyID.EQ(psql.Arg(o.ID))),
+	)...)
+}
+
+func (os APIKeySlice) APIKeyScopes(mods ...bob.Mod[*dialect.SelectQuery]) APIKeyScopesQuery {
+	pkID := make(pgtypes.Array[uuid.UUID], 0, len(os))
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "uuid[]"))
+
+	return APIKeyScopes.Query(append(mods,
+		sm.Where(APIKeyScopes.Columns.APIKeyID.EQ(PKArgExpr)),
+	)...)
+}
+
 func attachAPIKeyRoles0(ctx context.Context, exec bob.Executor, count int, apiKey0 *APIKey, roles2 RoleSlice) (APIKeyRoleSlice, error) {
 	setters := make([]*APIKeyRoleSetter, count)
 	for i := range count {
@@ -698,6 +723,76 @@ func (apiKey0 *APIKey) AttachRoles(ctx context.Context, exec bob.Executor, relat
 	return nil
 }
 
+func insertAPIKeyAPIKeyScopes0(ctx context.Context, exec bob.Executor, apiKeyScopes1 []*APIKeyScopeSetter, apiKey0 *APIKey) (APIKeyScopeSlice, error) {
+	for i := range apiKeyScopes1 {
+		apiKeyScopes1[i].APIKeyID = omit.From(apiKey0.ID)
+	}
+
+	ret, err := APIKeyScopes.Insert(bob.ToMods(apiKeyScopes1...)).All(ctx, exec)
+	if err != nil {
+		return ret, fmt.Errorf("insertAPIKeyAPIKeyScopes0: %w", err)
+	}
+
+	return ret, nil
+}
+
+func attachAPIKeyAPIKeyScopes0(ctx context.Context, exec bob.Executor, count int, apiKeyScopes1 APIKeyScopeSlice, apiKey0 *APIKey) (APIKeyScopeSlice, error) {
+	setter := &APIKeyScopeSetter{
+		APIKeyID: omit.From(apiKey0.ID),
+	}
+
+	err := apiKeyScopes1.UpdateAll(ctx, exec, *setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachAPIKeyAPIKeyScopes0: %w", err)
+	}
+
+	return apiKeyScopes1, nil
+}
+
+func (apiKey0 *APIKey) InsertAPIKeyScopes(ctx context.Context, exec bob.Executor, related ...*APIKeyScopeSetter) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+
+	apiKeyScopes1, err := insertAPIKeyAPIKeyScopes0(ctx, exec, related, apiKey0)
+	if err != nil {
+		return err
+	}
+
+	apiKey0.R.APIKeyScopes = append(apiKey0.R.APIKeyScopes, apiKeyScopes1...)
+
+	for _, rel := range apiKeyScopes1 {
+		rel.R.APIKey = apiKey0
+		rel.R.Loaded.APIKey = true
+	}
+	return nil
+}
+
+func (apiKey0 *APIKey) AttachAPIKeyScopes(ctx context.Context, exec bob.Executor, related ...*APIKeyScope) error {
+	if len(related) == 0 {
+		return nil
+	}
+
+	var err error
+	apiKeyScopes1 := APIKeyScopeSlice(related)
+
+	_, err = attachAPIKeyAPIKeyScopes0(ctx, exec, len(related), apiKeyScopes1, apiKey0)
+	if err != nil {
+		return err
+	}
+
+	apiKey0.R.APIKeyScopes = append(apiKey0.R.APIKeyScopes, apiKeyScopes1...)
+
+	for _, rel := range related {
+		rel.R.APIKey = apiKey0
+		rel.R.Loaded.APIKey = true
+	}
+
+	return nil
+}
+
 type apiKeyWhere[Q psql.Filterable] struct {
 	cols         apiKeyColumns
 	ID           psql.WhereMod[Q, uuid.UUID]
@@ -733,6 +828,20 @@ func buildAPIKeyWhere[Q psql.Filterable](cols apiKeyColumns) apiKeyWhere[Q] {
 // R struct — so they cannot collide with column-based filter fields.
 type apiKeyWhereR[Q psql.Filterable] struct {
 	cols apiKeyColumns
+}
+
+// HasAPIKeyScopes filters parents that have a matching APIKeyScopes using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to APIKeyScopes).
+func (w apiKeyWhereR[Q]) HasAPIKeyScopes(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+	q := psql.Select(
+		sm.Columns(psql.Raw("1")),
+		sm.From(APIKeyScopes.NameExpr()),
+		sm.Where(APIKeyScopes.Columns.APIKeyID.EQ(w.cols.ID)),
+	)
+	q.Apply(filters...)
+	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
 // HasRoles filters parents that have a matching Roles (a
@@ -872,6 +981,22 @@ func (o *APIKey) Preload(name string, retrieved any) error {
 			}
 		}
 		return nil
+	case "APIKeyScopes":
+		rels, ok := retrieved.(APIKeyScopeSlice)
+		if !ok {
+			return fmt.Errorf("apiKey cannot load %T as %q", retrieved, name)
+		}
+
+		o.R.APIKeyScopes = rels
+		o.R.Loaded.APIKeyScopes = true
+
+		for _, rel := range rels {
+			if rel != nil {
+				rel.R.APIKey = o
+				rel.R.Loaded.APIKey = true
+			}
+		}
+		return nil
 	default:
 		return fmt.Errorf("apiKey has no relationship %q", name)
 	}
@@ -884,12 +1009,16 @@ func buildAPIKeyPreloader() apiKeyPreloader {
 }
 
 type apiKeyThenLoader[Q orm.Loadable] struct {
-	Roles func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	Roles        func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	APIKeyScopes func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 }
 
 func buildAPIKeyThenLoader[Q orm.Loadable]() apiKeyThenLoader[Q] {
 	type RolesLoadInterface interface {
 		LoadRoles(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
+	}
+	type APIKeyScopesLoadInterface interface {
+		LoadAPIKeyScopes(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
 	}
 
 	return apiKeyThenLoader[Q]{
@@ -897,6 +1026,12 @@ func buildAPIKeyThenLoader[Q orm.Loadable]() apiKeyThenLoader[Q] {
 			"Roles",
 			func(ctx context.Context, exec bob.Executor, retrieved RolesLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
 				return retrieved.LoadRoles(ctx, exec, mods...)
+			},
+		),
+		APIKeyScopes: thenLoadBuilder[Q](
+			"APIKeyScopes",
+			func(ctx context.Context, exec bob.Executor, retrieved APIKeyScopesLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
+				return retrieved.LoadAPIKeyScopes(ctx, exec, mods...)
 			},
 		),
 	}
@@ -1013,9 +1148,84 @@ func (os APIKeySlice) LoadRoles(ctx context.Context, exec bob.Executor, mods ...
 	return nil
 }
 
+// LoadAPIKeyScopes loads the apiKey's APIKeyScopes into the .R struct
+func (o *APIKey) LoadAPIKeyScopes(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if o == nil {
+		return nil
+	}
+
+	// Reset the relationship
+	o.R.APIKeyScopes = nil
+	o.R.Loaded.APIKeyScopes = false
+
+	related, err := o.APIKeyScopes(mods...).All(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	for _, rel := range related {
+		rel.R.APIKey = o
+		rel.R.Loaded.APIKey = true
+	}
+
+	o.R.APIKeyScopes = related
+	o.R.Loaded.APIKeyScopes = true
+	return nil
+}
+
+// LoadAPIKeyScopes loads the apiKey's APIKeyScopes into the .R struct
+func (os APIKeySlice) LoadAPIKeyScopes(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if len(os) == 0 {
+		return nil
+	}
+
+	apiKeyScopes, err := os.APIKeyScopes(mods...).All(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		o.R.APIKeyScopes = nil
+		o.R.Loaded.APIKeyScopes = true
+	}
+	// O(N+M) stitch via a map keyed by the join column (key -> []parent; was O(N*M)).
+	apiKeyByKey := make(map[uuid.UUID][]*APIKey, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		apiKeyByKey[o.ID] = append(apiKeyByKey[o.ID], o)
+	}
+
+	for _, rel := range apiKeyScopes {
+
+		owners, ok := apiKeyByKey[rel.APIKeyID]
+		if !ok {
+			continue
+		}
+
+		for _, o := range owners {
+
+			rel.R.APIKey = o
+			rel.R.Loaded.APIKey = true
+
+			o.R.APIKeyScopes = append(o.R.APIKeyScopes, rel)
+
+		}
+	}
+
+	return nil
+}
+
 // apiKeyC is where relationship counts are stored.
 type apiKeyC struct {
-	Roles *int64
+	Roles        *int64
+	APIKeyScopes *int64
 }
 
 // PreloadCount sets a count in the C struct by name
@@ -1027,12 +1237,15 @@ func (o *APIKey) PreloadCount(name string, count int64) error {
 	switch name {
 	case "Roles":
 		o.C.Roles = &count
+	case "APIKeyScopes":
+		o.C.APIKeyScopes = &count
 	}
 	return nil
 }
 
 type apiKeyCountPreloader struct {
-	Roles func(...bob.Mod[*dialect.SelectQuery]) psql.Preloader
+	Roles        func(...bob.Mod[*dialect.SelectQuery]) psql.Preloader
+	APIKeyScopes func(...bob.Mod[*dialect.SelectQuery]) psql.Preloader
 }
 
 func buildAPIKeyCountPreloader() apiKeyCountPreloader {
@@ -1057,16 +1270,37 @@ func buildAPIKeyCountPreloader() apiKeyCountPreloader {
 				return psql.Group(psql.Select(subqueryMods...).Expression)
 			})
 		},
+		APIKeyScopes: func(mods ...bob.Mod[*dialect.SelectQuery]) psql.Preloader {
+			return countPreloader[*APIKey]("APIKeyScopes", func(parent string) bob.Expression {
+				// Build a correlated subquery: (SELECT COUNT(*) FROM related WHERE fk = parent.pk)
+				if parent == "" {
+					parent = APIKeys.Alias()
+				}
+
+				subqueryMods := []bob.Mod[*dialect.SelectQuery]{
+					sm.Columns(psql.Raw("count(*)")),
+
+					sm.From(APIKeyScopes.NameAsExpr()),
+					sm.Where(psql.Quote(APIKeyScopes.Alias(), "api_key_id").EQ(psql.Quote(parent, "id"))),
+				}
+				subqueryMods = append(subqueryMods, mods...)
+				return psql.Group(psql.Select(subqueryMods...).Expression)
+			})
+		},
 	}
 }
 
 type apiKeyCountThenLoader[Q orm.Loadable] struct {
-	Roles func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	Roles        func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	APIKeyScopes func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 }
 
 func buildAPIKeyCountThenLoader[Q orm.Loadable]() apiKeyCountThenLoader[Q] {
 	type RolesCountInterface interface {
 		LoadCountRoles(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
+	}
+	type APIKeyScopesCountInterface interface {
+		LoadCountAPIKeyScopes(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
 	}
 
 	return apiKeyCountThenLoader[Q]{
@@ -1074,6 +1308,12 @@ func buildAPIKeyCountThenLoader[Q orm.Loadable]() apiKeyCountThenLoader[Q] {
 			"Roles",
 			func(ctx context.Context, exec bob.Executor, retrieved RolesCountInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
 				return retrieved.LoadCountRoles(ctx, exec, mods...)
+			},
+		),
+		APIKeyScopes: countThenLoadBuilder[Q](
+			"APIKeyScopes",
+			func(ctx context.Context, exec bob.Executor, retrieved APIKeyScopesCountInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
+				return retrieved.LoadCountAPIKeyScopes(ctx, exec, mods...)
 			},
 		),
 	}
@@ -1161,9 +1401,89 @@ func (os APIKeySlice) LoadCountRoles(ctx context.Context, exec bob.Executor, mod
 	return nil
 }
 
+// LoadCountAPIKeyScopes loads the count of APIKeyScopes into the C struct
+func (o *APIKey) LoadCountAPIKeyScopes(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if o == nil {
+		return nil
+	}
+
+	count, err := o.APIKeyScopes(mods...).Count(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	o.C.APIKeyScopes = &count
+	return nil
+}
+
+// LoadCountAPIKeyScopes loads the count of APIKeyScopes for a slice in a single batch query
+func (os APIKeySlice) LoadCountAPIKeyScopes(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if len(os) == 0 {
+		return nil
+	}
+
+	// Build the IN arg expression from parent PKs
+
+	pkID := make(pgtypes.Array[uuid.UUID], 0, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		pkID = append(pkID, o.ID)
+	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "uuid[]"))
+
+	// countResult holds one scanned row from the batch count query.
+	// FK columns are aliased to the parent PK column names for direct map lookup.
+	type countResult struct {
+		ID    uuid.UUID
+		Count int64
+	}
+
+	batchMods := []bob.Mod[*dialect.SelectQuery]{
+		// SELECT fk AS parent_pk, count(*)
+		sm.Columns(
+			APIKeyScopes.Columns.APIKeyID.As("id"),
+			psql.Raw("count(*) as count"),
+		),
+		// Single-hop: FROM related table directly
+		sm.From(APIKeyScopes.NameAsExpr()),
+
+		// WHERE fk IN (parent PKs) — psql single-column FK uses `= ANY(array)` (see PKArgExpr above)
+		sm.Where(APIKeyScopes.Columns.APIKeyID.EQ(PKArgExpr)),
+		// GROUP BY fk columns
+		sm.GroupBy(APIKeyScopes.Columns.APIKeyID),
+	}
+	batchMods = append(batchMods, mods...)
+
+	results, err := bob.All(ctx, exec,
+		psql.Select(batchMods...),
+		scan.StructMapper[countResult](),
+	)
+	if err != nil {
+		return err
+	}
+
+	// Single-column FK: direct map lookup
+	countMap := make(map[uuid.UUID]int64, len(results))
+	for _, r := range results {
+		countMap[r.ID] = r.Count
+	}
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+		count := countMap[o.ID]
+		o.C.APIKeyScopes = &count
+	}
+
+	return nil
+}
+
 type apiKeyJoins[Q dialect.Joinable] struct {
-	typ   string
-	Roles modAs[Q, roleColumns]
+	typ          string
+	Roles        modAs[Q, roleColumns]
+	APIKeyScopes modAs[Q, apiKeyScopeColumns]
 }
 
 func (j apiKeyJoins[Q]) aliasedAs(alias string) apiKeyJoins[Q] {
@@ -1189,6 +1509,20 @@ func buildAPIKeyJoins[Q dialect.Joinable](cols apiKeyColumns, typ string) apiKey
 					cols := APIKeyRoles.Columns.AliasedAs(APIKeyRoles.Columns.Alias() + uniqueSuffix)
 					mods = append(mods, dialect.Join[Q](typ, Roles.NameExpr().As(to.Alias())).On(
 						to.Name.EQ(cols.RoleName),
+					))
+				}
+
+				return mods
+			},
+		},
+		APIKeyScopes: modAs[Q, apiKeyScopeColumns]{
+			c: APIKeyScopes.Columns,
+			f: func(to apiKeyScopeColumns) bob.Mod[Q] {
+				mods := make(mods.QueryMods[Q], 0, 1)
+
+				{
+					mods = append(mods, dialect.Join[Q](typ, APIKeyScopes.NameExpr().As(to.Alias())).On(
+						to.APIKeyID.EQ(cols.ID),
 					))
 				}
 
