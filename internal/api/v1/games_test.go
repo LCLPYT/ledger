@@ -4,8 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"github.com/aarondl/opt/omitnull"
 	. "github.com/onsi/ginkgo/v2"
 	. "github.com/onsi/gomega"
+	"github.com/quadrubo/golib/app"
 	"github.com/quadrubo/golib/testkit"
 	. "github.com/quadrubo/golib/testkit/matchers"
 	"github.com/samber/do/v2"
@@ -109,33 +109,21 @@ func (d *testDatabase) Settings() map[string]any {
 	}
 }
 
-// TODO remove dependency of serving asset repo module in games api tests
-func writeAssetRepoConfig() string {
-	GinkgoHelper()
-
-	dir := GinkgoT().TempDir()
-	Expect(os.Mkdir(filepath.Join(dir, "maps"), 0o755)).To(Succeed())
-
-	path := filepath.Join(dir, "repos.yaml")
-	Expect(os.WriteFile(path, []byte("repos:\n  - id: maps\n    path: maps\n"), 0o600)).To(Succeed())
-
-	return path
-}
-
 var _ = BeforeSuite(func(ctx SpecContext) {
 	var err error
 
 	suite, err = testkit.Boot(ctx, testkit.Options{
-		Modules:      wiring.Serve,
+		Modules: func(conf app.Module) []app.Module {
+			return slices.Concat(
+				wiring.Auth(conf),
+				wiring.GRPC(),
+			)
+		},
 		Dependencies: []testkit.Dependency{&testDatabase{}},
 		Settings: map[string]any{
 			"modules": map[string]any{
 				"grpcerr": map[string]any{"domain": errorDomain},
 				"logging": map[string]any{"level": "error"},
-				"asset_repo": map[string]any{
-					"addr":        "127.0.0.1:0",
-					"config_file": writeAssetRepoConfig(),
-				},
 			},
 		},
 	})

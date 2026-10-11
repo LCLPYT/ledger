@@ -1,6 +1,8 @@
 package wiring
 
 import (
+	"slices"
+
 	apiv1 "github.com/lclpyt/ledger/internal/api/v1"
 	"github.com/lclpyt/ledger/internal/assetrepo"
 	"github.com/lclpyt/ledger/internal/auth"
@@ -44,12 +46,17 @@ func Migrate(conf app.Module) []app.Module {
 	return append(Database(conf), migrate.Module(migrations.FS))
 }
 
-func Serve(conf app.Module) []app.Module {
+func Auth(conf app.Module) []app.Module {
 	return append(
 		Migrate(conf),
+		auth.Module(),
+	)
+}
+
+func GRPC() []app.Module {
+	return []app.Module{
 		grpcerr.Module(),
 		validate.Module(),
-		auth.Module(),
 		grpcserver.Module(grpcserver.WithUnaryInterceptors(
 			recovery.Unary,
 			errmap.Unary,
@@ -57,6 +64,19 @@ func Serve(conf app.Module) []app.Module {
 			validate.Unary,
 		)),
 		apiv1.Module(),
+	}
+}
+
+func AssetRepo() []app.Module {
+	return []app.Module{
 		assetrepo.Module(),
+	}
+}
+
+func Serve(conf app.Module) []app.Module {
+	return slices.Concat(
+		Auth(conf),
+		GRPC(),
+		AssetRepo(),
 	)
 }
