@@ -31,7 +31,6 @@ import (
 type User struct {
 	ID           int64               `db:"id,pk" `
 	Name         string              `db:"name" `
-	Email        string              `db:"email" `
 	CreateTime   time.Time           `db:"create_time" `
 	UpdateTime   time.Time           `db:"update_time" `
 	DeleteTime   null.Val[time.Time] `db:"delete_time" `
@@ -70,7 +69,7 @@ type userRLoaded struct {
 
 func buildUserColumns(tableName string) userColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "name", "email", "create_time", "update_time", "delete_time", "password_hash",
+		"id", "name", "create_time", "update_time", "delete_time", "password_hash",
 	)
 
 	if tableName != "" {
@@ -82,7 +81,6 @@ func buildUserColumns(tableName string) userColumns {
 		tableAlias:   tableName,
 		ID:           buildUserColumn(tableName, "id"),
 		Name:         buildUserColumn(tableName, "name"),
-		Email:        buildUserColumn(tableName, "email"),
 		CreateTime:   buildUserColumn(tableName, "create_time"),
 		UpdateTime:   buildUserColumn(tableName, "update_time"),
 		DeleteTime:   buildUserColumn(tableName, "delete_time"),
@@ -95,7 +93,6 @@ type userColumns struct {
 	tableAlias   string
 	ID           userColumn
 	Name         userColumn
-	Email        userColumn
 	CreateTime   userColumn
 	UpdateTime   userColumn
 	DeleteTime   userColumn
@@ -147,7 +144,6 @@ func (c userColumn) ShouldOmitParens() bool {
 type UserSetter struct {
 	ID           omit.Val[int64]         `db:"id,pk" `
 	Name         omit.Val[string]        `db:"name" `
-	Email        omit.Val[string]        `db:"email" `
 	CreateTime   omit.Val[time.Time]     `db:"create_time" `
 	UpdateTime   omit.Val[time.Time]     `db:"update_time" `
 	DeleteTime   omitnull.Val[time.Time] `db:"delete_time" `
@@ -155,15 +151,12 @@ type UserSetter struct {
 }
 
 func (s UserSetter) SetColumns() []string {
-	vals := make([]string, 0, 7)
+	vals := make([]string, 0, 6)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
 	if s.Name.IsValue() {
 		vals = append(vals, "name")
-	}
-	if s.Email.IsValue() {
-		vals = append(vals, "email")
 	}
 	if s.CreateTime.IsValue() {
 		vals = append(vals, "create_time")
@@ -186,9 +179,6 @@ func (s UserSetter) Overwrite(t *User) {
 	}
 	if s.Name.IsValue() {
 		t.Name = s.Name.MustGet()
-	}
-	if s.Email.IsValue() {
-		t.Email = s.Email.MustGet()
 	}
 	if s.CreateTime.IsValue() {
 		t.CreateTime = s.CreateTime.MustGet()
@@ -221,11 +211,6 @@ func (s *UserSetter) Apply(q *dialect.InsertQuery) {
 			}
 			return psql.Arg(s.Name.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.Email.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.Email.MustGet()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.CreateTime.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
@@ -253,7 +238,7 @@ func (s UserSetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s UserSetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 7)
+	exprs := make([]bob.Expression, 0, 6)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -266,13 +251,6 @@ func (s UserSetter) Expressions(prefix ...string) []bob.Expression {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "name")...),
 			psql.Arg(s.Name),
-		}})
-	}
-
-	if s.Email.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "email")...),
-			psql.Arg(s.Email),
 		}})
 	}
 
@@ -314,15 +292,13 @@ func userScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func(a
 		idx int
 		dst func(o *User) any
 	}
-	targets := make([]target, 0, 7)
+	targets := make([]target, 0, 6)
 	for i, col := range cols {
 		switch col {
 		case "id":
 			targets = append(targets, target{i, func(o *User) any { return &o.ID }})
 		case "name":
 			targets = append(targets, target{i, func(o *User) any { return &o.Name }})
-		case "email":
-			targets = append(targets, target{i, func(o *User) any { return &o.Email }})
 		case "create_time":
 			targets = append(targets, target{i, func(o *User) any { return &o.CreateTime }})
 		case "update_time":
@@ -796,7 +772,6 @@ type userWhere[Q psql.Filterable] struct {
 	cols         userColumns
 	ID           psql.WhereMod[Q, int64]
 	Name         psql.WhereMod[Q, string]
-	Email        psql.WhereMod[Q, string]
 	CreateTime   psql.WhereMod[Q, time.Time]
 	UpdateTime   psql.WhereMod[Q, time.Time]
 	DeleteTime   psql.WhereNullMod[Q, time.Time]
@@ -813,7 +788,6 @@ func buildUserWhere[Q psql.Filterable](cols userColumns) userWhere[Q] {
 		cols:         cols,
 		ID:           psql.Where[Q, int64](cols.ID.Expression),
 		Name:         psql.Where[Q, string](cols.Name.Expression),
-		Email:        psql.Where[Q, string](cols.Email.Expression),
 		CreateTime:   psql.Where[Q, time.Time](cols.CreateTime.Expression),
 		UpdateTime:   psql.Where[Q, time.Time](cols.UpdateTime.Expression),
 		DeleteTime:   psql.WhereNull[Q, time.Time](cols.DeleteTime.Expression),
@@ -866,7 +840,6 @@ func (w userWhereR[Q]) HasRoles(filters ...bob.Mod[*dialect.SelectQuery]) mods.W
 type userPreloadBuf struct {
 	ID           null.Val[int64]
 	Name         null.Val[string]
-	Email        null.Val[string]
 	CreateTime   null.Val[time.Time]
 	UpdateTime   null.Val[time.Time]
 	DeleteTime   null.Val[time.Time]
@@ -885,7 +858,7 @@ func userScanMapperNullable(prefix string) scan.Mapper[*User] {
 			idx int
 			dst func(b *userPreloadBuf) any
 		}
-		targets := make([]target, 0, 7)
+		targets := make([]target, 0, 6)
 		for i, col := range cols {
 			name, ok := strings.CutPrefix(col, prefix)
 			if !ok {
@@ -896,8 +869,6 @@ func userScanMapperNullable(prefix string) scan.Mapper[*User] {
 				targets = append(targets, target{i, func(b *userPreloadBuf) any { return &b.ID }})
 			case "name":
 				targets = append(targets, target{i, func(b *userPreloadBuf) any { return &b.Name }})
-			case "email":
-				targets = append(targets, target{i, func(b *userPreloadBuf) any { return &b.Email }})
 			case "create_time":
 				targets = append(targets, target{i, func(b *userPreloadBuf) any { return &b.CreateTime }})
 			case "update_time":
@@ -930,7 +901,6 @@ func userScanMapperNullable(prefix string) scan.Mapper[*User] {
 				// so this check also matches when only a subset is selected.
 				if !(buf.ID.IsValue()) &&
 					!(buf.Name.IsValue()) &&
-					!(buf.Email.IsValue()) &&
 					!(buf.CreateTime.IsValue()) &&
 					!(buf.UpdateTime.IsValue()) &&
 					!(buf.DeleteTime.IsValue()) &&
@@ -944,9 +914,6 @@ func userScanMapperNullable(prefix string) scan.Mapper[*User] {
 				}
 				if buf.Name.IsValue() {
 					o.Name = buf.Name.MustGet()
-				}
-				if buf.Email.IsValue() {
-					o.Email = buf.Email.MustGet()
 				}
 				if buf.CreateTime.IsValue() {
 					o.CreateTime = buf.CreateTime.MustGet()

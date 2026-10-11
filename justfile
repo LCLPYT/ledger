@@ -10,6 +10,15 @@ alias db-gen := bobgen
 build:
     go build .
 
+run *args: db
+    go run . {{args}}
+
+serve:
+    just run serve
+
+tui: db
+    go run . tui
+
 migrate: db
     go run github.com/pressly/goose/v3/cmd/goose@$(go list -m -f '{{{{.Version}}' github.com/pressly/goose/v3) \
         -dir internal/db/migrations postgres "{{DB_DSN}}" up

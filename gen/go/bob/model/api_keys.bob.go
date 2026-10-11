@@ -30,13 +30,13 @@ import (
 // APIKey is an object representing the database table.
 type APIKey struct {
 	ID           uuid.UUID           `db:"id,pk" `
+	UserID       int64               `db:"user_id" `
 	Name         string              `db:"name" `
 	SecretHash   []byte              `db:"secret_hash" `
 	CreateTime   time.Time           `db:"create_time" `
 	ExpireTime   null.Val[time.Time] `db:"expire_time" `
 	RevokeTime   null.Val[time.Time] `db:"revoke_time" `
 	LastUsedTime null.Val[time.Time] `db:"last_used_time" `
-	UserID       int64               `db:"user_id" `
 
 	R apiKeyR `db:"-" `
 
@@ -71,7 +71,7 @@ type apiKeyRLoaded struct {
 
 func buildAPIKeyColumns(tableName string) apiKeyColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "name", "secret_hash", "create_time", "expire_time", "revoke_time", "last_used_time", "user_id",
+		"id", "user_id", "name", "secret_hash", "create_time", "expire_time", "revoke_time", "last_used_time",
 	)
 
 	if tableName != "" {
@@ -82,13 +82,13 @@ func buildAPIKeyColumns(tableName string) apiKeyColumns {
 		ColumnsExpr:  columnsExpr,
 		tableAlias:   tableName,
 		ID:           buildAPIKeyColumn(tableName, "id"),
+		UserID:       buildAPIKeyColumn(tableName, "user_id"),
 		Name:         buildAPIKeyColumn(tableName, "name"),
 		SecretHash:   buildAPIKeyColumn(tableName, "secret_hash"),
 		CreateTime:   buildAPIKeyColumn(tableName, "create_time"),
 		ExpireTime:   buildAPIKeyColumn(tableName, "expire_time"),
 		RevokeTime:   buildAPIKeyColumn(tableName, "revoke_time"),
 		LastUsedTime: buildAPIKeyColumn(tableName, "last_used_time"),
-		UserID:       buildAPIKeyColumn(tableName, "user_id"),
 	}
 }
 
@@ -96,13 +96,13 @@ type apiKeyColumns struct {
 	expr.ColumnsExpr
 	tableAlias   string
 	ID           apiKeyColumn
+	UserID       apiKeyColumn
 	Name         apiKeyColumn
 	SecretHash   apiKeyColumn
 	CreateTime   apiKeyColumn
 	ExpireTime   apiKeyColumn
 	RevokeTime   apiKeyColumn
 	LastUsedTime apiKeyColumn
-	UserID       apiKeyColumn
 }
 
 // Alias returns the current table alias for the columns set.
@@ -149,19 +149,22 @@ func (c apiKeyColumn) ShouldOmitParens() bool {
 // Generated columns are not included
 type APIKeySetter struct {
 	ID           omit.Val[uuid.UUID]     `db:"id,pk" `
+	UserID       omit.Val[int64]         `db:"user_id" `
 	Name         omit.Val[string]        `db:"name" `
 	SecretHash   omit.Val[[]byte]        `db:"secret_hash" `
 	CreateTime   omit.Val[time.Time]     `db:"create_time" `
 	ExpireTime   omitnull.Val[time.Time] `db:"expire_time" `
 	RevokeTime   omitnull.Val[time.Time] `db:"revoke_time" `
 	LastUsedTime omitnull.Val[time.Time] `db:"last_used_time" `
-	UserID       omit.Val[int64]         `db:"user_id" `
 }
 
 func (s APIKeySetter) SetColumns() []string {
 	vals := make([]string, 0, 8)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
+	}
+	if s.UserID.IsValue() {
+		vals = append(vals, "user_id")
 	}
 	if s.Name.IsValue() {
 		vals = append(vals, "name")
@@ -181,15 +184,15 @@ func (s APIKeySetter) SetColumns() []string {
 	if s.LastUsedTime.IsValue() || s.LastUsedTime.IsNull() {
 		vals = append(vals, "last_used_time")
 	}
-	if s.UserID.IsValue() {
-		vals = append(vals, "user_id")
-	}
 	return vals
 }
 
 func (s APIKeySetter) Overwrite(t *APIKey) {
 	if s.ID.IsValue() {
 		t.ID = s.ID.MustGet()
+	}
+	if s.UserID.IsValue() {
+		t.UserID = s.UserID.MustGet()
 	}
 	if s.Name.IsValue() {
 		t.Name = s.Name.MustGet()
@@ -209,9 +212,6 @@ func (s APIKeySetter) Overwrite(t *APIKey) {
 	if s.LastUsedTime.IsValue() || s.LastUsedTime.IsNull() {
 		t.LastUsedTime = s.LastUsedTime.MustGetNull()
 	}
-	if s.UserID.IsValue() {
-		t.UserID = s.UserID.MustGet()
-	}
 }
 
 func (s *APIKeySetter) Apply(q *dialect.InsertQuery) {
@@ -225,6 +225,11 @@ func (s *APIKeySetter) Apply(q *dialect.InsertQuery) {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
 			return psql.Arg(s.ID.MustGet()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.UserID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.UserID.MustGet()).WriteSQL(ctx, w, d, start)
 		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 			if s.Name.IsUnset() {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
@@ -255,11 +260,6 @@ func (s *APIKeySetter) Apply(q *dialect.InsertQuery) {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
 			return psql.Arg(s.LastUsedTime.MustGetNull()).WriteSQL(ctx, w, d, start)
-		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
-			if s.UserID.IsUnset() {
-				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
-			}
-			return psql.Arg(s.UserID.MustGet()).WriteSQL(ctx, w, d, start)
 		}))
 }
 
@@ -274,6 +274,13 @@ func (s APIKeySetter) Expressions(prefix ...string) []bob.Expression {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
 			psql.Quote(append(prefix, "id")...),
 			psql.Arg(s.ID),
+		}})
+	}
+
+	if s.UserID.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "user_id")...),
+			psql.Arg(s.UserID),
 		}})
 	}
 
@@ -319,13 +326,6 @@ func (s APIKeySetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
-	if s.UserID.IsValue() {
-		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
-			psql.Quote(append(prefix, "user_id")...),
-			psql.Arg(s.UserID),
-		}})
-	}
-
 	return exprs
 }
 
@@ -341,6 +341,8 @@ func apiKeyScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func
 		switch col {
 		case "id":
 			targets = append(targets, target{i, func(o *APIKey) any { return &o.ID }})
+		case "user_id":
+			targets = append(targets, target{i, func(o *APIKey) any { return &o.UserID }})
 		case "name":
 			targets = append(targets, target{i, func(o *APIKey) any { return &o.Name }})
 		case "secret_hash":
@@ -353,8 +355,6 @@ func apiKeyScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func
 			targets = append(targets, target{i, func(o *APIKey) any { return &o.RevokeTime }})
 		case "last_used_time":
 			targets = append(targets, target{i, func(o *APIKey) any { return &o.LastUsedTime }})
-		case "user_id":
-			targets = append(targets, target{i, func(o *APIKey) any { return &o.UserID }})
 		}
 	}
 
@@ -806,13 +806,13 @@ func (apiKey0 *APIKey) AttachUser(ctx context.Context, exec bob.Executor, user1 
 type apiKeyWhere[Q psql.Filterable] struct {
 	cols         apiKeyColumns
 	ID           psql.WhereMod[Q, uuid.UUID]
+	UserID       psql.WhereMod[Q, int64]
 	Name         psql.WhereMod[Q, string]
 	SecretHash   psql.WhereMod[Q, []byte]
 	CreateTime   psql.WhereMod[Q, time.Time]
 	ExpireTime   psql.WhereNullMod[Q, time.Time]
 	RevokeTime   psql.WhereNullMod[Q, time.Time]
 	LastUsedTime psql.WhereNullMod[Q, time.Time]
-	UserID       psql.WhereMod[Q, int64]
 	R            apiKeyWhereR[Q]
 }
 
@@ -824,13 +824,13 @@ func buildAPIKeyWhere[Q psql.Filterable](cols apiKeyColumns) apiKeyWhere[Q] {
 	return apiKeyWhere[Q]{
 		cols:         cols,
 		ID:           psql.Where[Q, uuid.UUID](cols.ID.Expression),
+		UserID:       psql.Where[Q, int64](cols.UserID.Expression),
 		Name:         psql.Where[Q, string](cols.Name.Expression),
 		SecretHash:   psql.Where[Q, []byte](cols.SecretHash.Expression),
 		CreateTime:   psql.Where[Q, time.Time](cols.CreateTime.Expression),
 		ExpireTime:   psql.WhereNull[Q, time.Time](cols.ExpireTime.Expression),
 		RevokeTime:   psql.WhereNull[Q, time.Time](cols.RevokeTime.Expression),
 		LastUsedTime: psql.WhereNull[Q, time.Time](cols.LastUsedTime.Expression),
-		UserID:       psql.Where[Q, int64](cols.UserID.Expression),
 		R:            apiKeyWhereR[Q]{cols: cols},
 	}
 }
@@ -875,13 +875,13 @@ func (w apiKeyWhereR[Q]) HasUser(filters ...bob.Mod[*dialect.SelectQuery]) mods.
 // nullable version of the column type even when the column itself is NOT NULL.
 type apiKeyPreloadBuf struct {
 	ID           null.Val[uuid.UUID]
+	UserID       null.Val[int64]
 	Name         null.Val[string]
 	SecretHash   null.Val[[]byte]
 	CreateTime   null.Val[time.Time]
 	ExpireTime   null.Val[time.Time]
 	RevokeTime   null.Val[time.Time]
 	LastUsedTime null.Val[time.Time]
-	UserID       null.Val[int64]
 }
 
 // apiKeyScanMapperNullable maps the preloaded apiKey
@@ -905,6 +905,8 @@ func apiKeyScanMapperNullable(prefix string) scan.Mapper[*APIKey] {
 			switch name {
 			case "id":
 				targets = append(targets, target{i, func(b *apiKeyPreloadBuf) any { return &b.ID }})
+			case "user_id":
+				targets = append(targets, target{i, func(b *apiKeyPreloadBuf) any { return &b.UserID }})
 			case "name":
 				targets = append(targets, target{i, func(b *apiKeyPreloadBuf) any { return &b.Name }})
 			case "secret_hash":
@@ -917,8 +919,6 @@ func apiKeyScanMapperNullable(prefix string) scan.Mapper[*APIKey] {
 				targets = append(targets, target{i, func(b *apiKeyPreloadBuf) any { return &b.RevokeTime }})
 			case "last_used_time":
 				targets = append(targets, target{i, func(b *apiKeyPreloadBuf) any { return &b.LastUsedTime }})
-			case "user_id":
-				targets = append(targets, target{i, func(b *apiKeyPreloadBuf) any { return &b.UserID }})
 			}
 		}
 
@@ -942,19 +942,22 @@ func apiKeyScanMapperNullable(prefix string) scan.Mapper[*APIKey] {
 				// not selected by the query are never scanned and stay invalid,
 				// so this check also matches when only a subset is selected.
 				if !(buf.ID.IsValue()) &&
+					!(buf.UserID.IsValue()) &&
 					!(buf.Name.IsValue()) &&
 					!(buf.SecretHash.IsValue()) &&
 					!(buf.CreateTime.IsValue()) &&
 					!(buf.ExpireTime.IsValue()) &&
 					!(buf.RevokeTime.IsValue()) &&
-					!(buf.LastUsedTime.IsValue()) &&
-					!(buf.UserID.IsValue()) {
+					!(buf.LastUsedTime.IsValue()) {
 					return nil, nil
 				}
 
 				o := new(APIKey)
 				if buf.ID.IsValue() {
 					o.ID = buf.ID.MustGet()
+				}
+				if buf.UserID.IsValue() {
+					o.UserID = buf.UserID.MustGet()
 				}
 				if buf.Name.IsValue() {
 					o.Name = buf.Name.MustGet()
@@ -968,9 +971,6 @@ func apiKeyScanMapperNullable(prefix string) scan.Mapper[*APIKey] {
 				o.ExpireTime = buf.ExpireTime
 				o.RevokeTime = buf.RevokeTime
 				o.LastUsedTime = buf.LastUsedTime
-				if buf.UserID.IsValue() {
-					o.UserID = buf.UserID.MustGet()
-				}
 				return o, nil
 			}
 	}

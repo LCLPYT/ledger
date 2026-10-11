@@ -347,7 +347,7 @@ func isMember(role admin.Role, userID int64) bool {
 }
 
 func userLabel(user *model.User) string {
-	label := fmt.Sprintf("%s <%s>", user.Name, user.Email)
+	label := user.Name
 
 	if user.DeleteTime.IsValue() {
 		label += " [deleted]"

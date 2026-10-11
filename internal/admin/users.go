@@ -57,18 +57,16 @@ func (s *Service) Users(ctx context.Context) ([]User, error) {
 	return result, nil
 }
 
-// EmailTaken reports whether a user other than exceptID uses the email.
-func (s *Service) EmailTaken(ctx context.Context, email string, exceptID int64) (bool, error) {
+// UserNameTaken reports whether a user other than exceptID uses the name.
+func (s *Service) UserNameTaken(ctx context.Context, name string, exceptID int64) (bool, error) {
 	return model.Users.Query(
-		model.SelectWhere.Users.Email.EQ(email),
+		model.SelectWhere.Users.Name.EQ(strings.TrimSpace(name)),
 		model.SelectWhere.Users.ID.NE(exceptID),
 	).Exists(ctx, s.db)
 }
 
-func (s *Service) CreateUser(ctx context.Context, name, email string, password []byte) (*model.User, error) {
-	email, err := s.checkUser(ctx, name, email, 0)
-
-	if err != nil {
+func (s *Service) CreateUser(ctx context.Context, name string, password []byte) (*model.User, error) {
+	if err := s.checkUserName(ctx, name, 0); err != nil {
 		return nil, err
 	}
 
@@ -80,22 +78,16 @@ func (s *Service) CreateUser(ctx context.Context, name, email string, password [
 
 	return model.Users.Insert(&model.UserSetter{
 		Name:         omit.From(strings.TrimSpace(name)),
-		Email:        omit.From(email),
 		PasswordHash: omit.From(hash),
 	}).One(ctx, s.db)
 }
 
-func (s *Service) UpdateUser(ctx context.Context, id int64, name, email string) error {
-	email, err := s.checkUser(ctx, name, email, id)
-
-	if err != nil {
+func (s *Service) UpdateUser(ctx context.Context, id int64, name string) error {
+	if err := s.checkUserName(ctx, name, id); err != nil {
 		return err
 	}
 
-	return s.updateUser(ctx, id, &model.UserSetter{
-		Name:  omit.From(strings.TrimSpace(name)),
-		Email: omit.From(email),
-	})
+	return s.updateUser(ctx, id, &model.UserSetter{Name: omit.From(strings.TrimSpace(name))})
 }
 
 func (s *Service) SetPassword(ctx context.Context, id int64, password []byte) error {
@@ -142,28 +134,22 @@ func (s *Service) SetUserRoles(ctx context.Context, id int64, roles []string) er
 	})
 }
 
-func (s *Service) checkUser(ctx context.Context, name, email string, id int64) (string, error) {
+func (s *Service) checkUserName(ctx context.Context, name string, id int64) error {
 	if err := ValidateUserName(name); err != nil {
-		return "", err
+		return err
 	}
 
-	email, err := NormalizeEmail(email)
+	taken, err := s.UserNameTaken(ctx, name, id)
 
 	if err != nil {
-		return "", err
-	}
-
-	taken, err := s.EmailTaken(ctx, email, id)
-
-	if err != nil {
-		return "", err
+		return err
 	}
 
 	if taken {
-		return "", errors.New("another user already uses that email")
+		return errors.New("another user already uses that name")
 	}
 
-	return email, nil
+	return nil
 }
 
 func (s *Service) updateUser(ctx context.Context, id int64, setter *model.UserSetter) error {

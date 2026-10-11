@@ -29,7 +29,6 @@ var userKeys = struct {
 var userColumns = []column{
 	{title: "ID", min: 4},
 	{title: "Name", min: 12, flex: 2},
-	{title: "Email", min: 16, flex: 3},
 	{title: "Roles", min: 10, flex: 3},
 	{title: "Status", min: 8},
 }
@@ -150,7 +149,6 @@ func (t *usersTab) rows() []table.Row {
 		rows[i] = table.Row{
 			strconv.FormatInt(user.ID, 10),
 			user.Name,
-			user.Email,
 			strings.Join(user.Roles, ", "),
 			status,
 		}
@@ -190,7 +188,6 @@ func (t *usersTab) detail() string {
 
 	lines := []string{
 		styles.heading.Render(user.Name),
-		field("Email", user.Email),
 		field("Roles", listOrNone(user.Roles, ", ")),
 		field("Created", formatTime(user.CreateTime)),
 		field("Updated", formatTime(user.UpdateTime)),
@@ -203,22 +200,20 @@ func (t *usersTab) detail() string {
 	return renderDetail(t.width, lines...)
 }
 
-func (t *usersTab) emailValidator(exceptID int64) func(string) error {
+func (t *usersTab) nameValidator(exceptID int64) func(string) error {
 	return func(value string) error {
-		email, err := admin.NormalizeEmail(value)
-
-		if err != nil {
+		if err := admin.ValidateUserName(value); err != nil {
 			return err
 		}
 
-		taken, err := t.svc.EmailTaken(t.ctx, email, exceptID)
+		taken, err := t.svc.UserNameTaken(t.ctx, value, exceptID)
 
 		if err != nil {
 			return err
 		}
 
 		if taken {
-			return errors.New("another user already uses that email")
+			return errors.New("another user already uses that name")
 		}
 
 		return nil
@@ -261,12 +256,11 @@ func (t *usersTab) roleSelect(value *[]string) *huh.MultiSelect[string] {
 }
 
 func (t *usersTab) openCreate() tea.Cmd {
-	var name, email, password, confirmation string
+	var name, password, confirmation string
 	var roles []string
 
 	fields := append([]huh.Field{
-		huh.NewInput().Title("Name").Validate(admin.ValidateUserName).Value(&name),
-		huh.NewInput().Title("Email").Validate(t.emailValidator(0)).Value(&email),
+		huh.NewInput().Title("Name").Validate(t.nameValidator(0)).Value(&name),
 	}, passwordInputs(&password, &confirmation)...)
 
 	groups := []*huh.Group{huh.NewGroup(fields...).Title("New user")}
@@ -277,7 +271,7 @@ func (t *usersTab) openCreate() tea.Cmd {
 
 	return t.dialog.open(t.width, func() tea.Cmd {
 		return t.mutate("Created user "+name, func(ctx context.Context) error {
-			user, err := t.svc.CreateUser(ctx, name, email, []byte(password))
+			user, err := t.svc.CreateUser(ctx, name, []byte(password))
 
 			if err != nil || len(roles) == 0 {
 				return err
@@ -289,15 +283,14 @@ func (t *usersTab) openCreate() tea.Cmd {
 }
 
 func (t *usersTab) openEdit(user admin.User) tea.Cmd {
-	name, email := user.Name, user.Email
+	name := user.Name
 
 	return t.dialog.open(t.width, func() tea.Cmd {
 		return t.mutate("Updated user "+name, func(ctx context.Context) error {
-			return t.svc.UpdateUser(ctx, user.ID, name, email)
+			return t.svc.UpdateUser(ctx, user.ID, name)
 		})
 	}, huh.NewGroup(
-		huh.NewInput().Title("Name").Validate(admin.ValidateUserName).Value(&name),
-		huh.NewInput().Title("Email").Validate(t.emailValidator(user.ID)).Value(&email),
+		huh.NewInput().Title("Name").Validate(t.nameValidator(user.ID)).Value(&name),
 	).Title("Edit "+user.Name))
 }
 

@@ -3,7 +3,6 @@ package admin
 import (
 	"errors"
 	"fmt"
-	"net/mail"
 	"regexp"
 	"strings"
 
@@ -17,20 +16,6 @@ const (
 
 // rolePattern mirrors the check constraint on roles.name.
 var rolePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
-
-func NormalizeEmail(email string) (string, error) {
-	if strings.TrimSpace(email) == "" {
-		return "", errors.New("email must not be empty")
-	}
-
-	address, err := mail.ParseAddress(email)
-
-	if err != nil {
-		return "", errors.New("invalid email address")
-	}
-
-	return strings.ToLower(address.Address), nil
-}
 
 func ValidateUserName(name string) error {
 	if strings.TrimSpace(name) == "" {

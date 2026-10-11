@@ -77,7 +77,6 @@ func createAPIKeyWith(ctx context.Context, setter *model.APIKeySetter, permissio
 
 	user, err := model.Users.Insert(&model.UserSetter{
 		Name:         omit.From(role + "_user"),
-		Email:        omit.From(role + "@example.com"),
 		PasswordHash: omit.From([]byte{}),
 	}).One(ctx, db)
 	Expect(err).ToNot(HaveOccurred())
