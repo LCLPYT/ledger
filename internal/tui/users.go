@@ -259,6 +259,10 @@ func (t *usersTab) openCreate() tea.Cmd {
 	var name, password, confirmation string
 	var roles []string
 
+	if slices.Contains(t.roles, admin.DefaultUserRole) {
+		roles = []string{admin.DefaultUserRole}
+	}
+
 	fields := append([]huh.Field{
 		huh.NewInput().Title("Name").Validate(t.nameValidator(0)).Value(&name),
 	}, passwordInputs(&password, &confirmation)...)

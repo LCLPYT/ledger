@@ -270,6 +270,12 @@ func (t *rolesTab) openCreate() tea.Cmd {
 }
 
 func (t *rolesTab) openRename(role admin.Role) tea.Cmd {
+	if admin.IsProtectedRole(role.Name) {
+		return func() tea.Msg {
+			return statusMsg{err: fmt.Errorf("role %s is protected and cannot be renamed", role.Name)}
+		}
+	}
+
 	name := role.Name
 
 	return t.dialog.open(t.width, func() tea.Cmd {
@@ -327,6 +333,12 @@ func (t *rolesTab) openMembers(role admin.Role) tea.Cmd {
 }
 
 func (t *rolesTab) openDelete(role admin.Role) tea.Cmd {
+	if admin.IsProtectedRole(role.Name) {
+		return func() tea.Msg {
+			return statusMsg{err: fmt.Errorf("role %s is protected and cannot be deleted", role.Name)}
+		}
+	}
+
 	var confirmed bool
 
 	description := fmt.Sprintf("%d member(s) lose the permissions it grants.", len(role.Members))

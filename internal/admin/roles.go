@@ -15,6 +15,17 @@ import (
 	"github.com/stephenafamo/bob/dialect/psql/sm"
 )
 
+const (
+	// DefaultUserRole is preselected for new users
+	DefaultUserRole = "user"
+	AdminRole       = "admin"
+)
+
+// IsProtectedRole reports whether the role is seeded by the migrations and thus must not be renamed or deleted.
+func IsProtectedRole(name string) bool {
+	return name == DefaultUserRole || name == AdminRole
+}
+
 type Role struct {
 	*model.Role
 	Permissions []string
@@ -113,6 +124,10 @@ func (s *Service) CreateRole(ctx context.Context, name string, permissions []str
 }
 
 func (s *Service) RenameRole(ctx context.Context, name, newName string) error {
+	if IsProtectedRole(name) {
+		return fmt.Errorf("role %s is protected and cannot be renamed", name)
+	}
+
 	if err := ValidateRoleName(newName); err != nil {
 		return err
 	}
@@ -142,6 +157,10 @@ func (s *Service) RenameRole(ctx context.Context, name, newName string) error {
 
 // DeleteRole deletes the role, removing it from every member.
 func (s *Service) DeleteRole(ctx context.Context, name string) error {
+	if IsProtectedRole(name) {
+		return fmt.Errorf("role %s is protected and cannot be deleted", name)
+	}
+
 	role, err := findRole(ctx, s.db, name)
 
 	if err != nil {
