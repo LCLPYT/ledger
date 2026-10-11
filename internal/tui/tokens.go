@@ -267,15 +267,11 @@ func (t *tokensTab) openCreate() tea.Cmd {
 		scopes []string
 	)
 
+	ownerUnprivileged := func() bool { return len(t.permissions[owner]) == 0 }
+
 	scopeSelect := huh.NewMultiSelect[string]().
 		Title("Scopes").
-		DescriptionFunc(func() string {
-			if len(t.permissions[owner]) == 0 {
-				return "The owner holds no permissions, the token is denied everything until the owner gets a role."
-			}
-
-			return "Restricts the token to the selected permissions. Select none to use full owner permissions for the token."
-		}, &owner).
+		Description("Restricts the token to the selected permissions. Select none to use full owner permissions for the token.").
 		OptionsFunc(func() []huh.Option[string] {
 			return huh.NewOptions(t.svc.Scopes(t.permissions[owner])...)
 		}, &owner).
@@ -284,6 +280,10 @@ func (t *tokensTab) openCreate() tea.Cmd {
 		Value(&scopes)
 
 	return t.dialog.open(t.width, func() tea.Cmd {
+		if ownerUnprivileged() {
+			scopes = nil
+		}
+
 		var expire *time.Time
 
 		if expiry > 0 {
@@ -306,7 +306,12 @@ func (t *tokensTab) openCreate() tea.Cmd {
 			huh.NewInput().Title("Name").Validate(notBlank).Value(&name),
 			huh.NewSelect[time.Duration]().Title("Expires after").Options(expiryOptions...).Value(&expiry),
 		).Title("New access token"),
-		huh.NewGroup(scopeSelect),
+		huh.NewGroup(scopeSelect).WithHideFunc(ownerUnprivileged),
+		huh.NewGroup(
+			huh.NewNote().
+				Title("Scopes").
+				Description("The owner holds no permissions, the token is denied everything until the owner gets a role."),
+		).WithHideFunc(func() bool { return !ownerUnprivileged() }),
 	)
 }
 
