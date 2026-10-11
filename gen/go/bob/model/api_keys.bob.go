@@ -7,7 +7,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +36,7 @@ type APIKey struct {
 	ExpireTime   null.Val[time.Time] `db:"expire_time" `
 	RevokeTime   null.Val[time.Time] `db:"revoke_time" `
 	LastUsedTime null.Val[time.Time] `db:"last_used_time" `
+	UserID       int64               `db:"user_id" `
 
 	R apiKeyR `db:"-" `
 
@@ -55,8 +55,8 @@ type APIKeysQuery = *psql.ViewQuery[*APIKey, APIKeySlice]
 
 // apiKeyR is where relationships are stored.
 type apiKeyR struct {
-	Roles        RoleSlice        // api_key_roles.api_key_roles_api_key_id_fkeyapi_key_roles.api_key_roles_role_name_fkey
 	APIKeyScopes APIKeyScopeSlice // api_key_scopes.api_key_scopes_api_key_id_fkey
+	User         *User            // api_keys.api_keys_user_id_fkey
 	// Loaded reports whether each relationship has been loaded.
 	// A relationship's bool is set by Load*, Preload, ThenLoad, factory builds,
 	// and to-one Attach/Insert operations. To-many Attach/Insert operations leave it unchanged.
@@ -65,13 +65,13 @@ type apiKeyR struct {
 
 // apiKeyRLoaded tracks which relationships on APIKey have been loaded.
 type apiKeyRLoaded struct {
-	Roles        bool // api_key_roles.api_key_roles_api_key_id_fkeyapi_key_roles.api_key_roles_role_name_fkey
 	APIKeyScopes bool // api_key_scopes.api_key_scopes_api_key_id_fkey
+	User         bool // api_keys.api_keys_user_id_fkey
 }
 
 func buildAPIKeyColumns(tableName string) apiKeyColumns {
 	columnsExpr := expr.NewColumnsExpr(
-		"id", "name", "secret_hash", "create_time", "expire_time", "revoke_time", "last_used_time",
+		"id", "name", "secret_hash", "create_time", "expire_time", "revoke_time", "last_used_time", "user_id",
 	)
 
 	if tableName != "" {
@@ -88,6 +88,7 @@ func buildAPIKeyColumns(tableName string) apiKeyColumns {
 		ExpireTime:   buildAPIKeyColumn(tableName, "expire_time"),
 		RevokeTime:   buildAPIKeyColumn(tableName, "revoke_time"),
 		LastUsedTime: buildAPIKeyColumn(tableName, "last_used_time"),
+		UserID:       buildAPIKeyColumn(tableName, "user_id"),
 	}
 }
 
@@ -101,6 +102,7 @@ type apiKeyColumns struct {
 	ExpireTime   apiKeyColumn
 	RevokeTime   apiKeyColumn
 	LastUsedTime apiKeyColumn
+	UserID       apiKeyColumn
 }
 
 // Alias returns the current table alias for the columns set.
@@ -153,10 +155,11 @@ type APIKeySetter struct {
 	ExpireTime   omitnull.Val[time.Time] `db:"expire_time" `
 	RevokeTime   omitnull.Val[time.Time] `db:"revoke_time" `
 	LastUsedTime omitnull.Val[time.Time] `db:"last_used_time" `
+	UserID       omit.Val[int64]         `db:"user_id" `
 }
 
 func (s APIKeySetter) SetColumns() []string {
-	vals := make([]string, 0, 7)
+	vals := make([]string, 0, 8)
 	if s.ID.IsValue() {
 		vals = append(vals, "id")
 	}
@@ -177,6 +180,9 @@ func (s APIKeySetter) SetColumns() []string {
 	}
 	if s.LastUsedTime.IsValue() || s.LastUsedTime.IsNull() {
 		vals = append(vals, "last_used_time")
+	}
+	if s.UserID.IsValue() {
+		vals = append(vals, "user_id")
 	}
 	return vals
 }
@@ -202,6 +208,9 @@ func (s APIKeySetter) Overwrite(t *APIKey) {
 	}
 	if s.LastUsedTime.IsValue() || s.LastUsedTime.IsNull() {
 		t.LastUsedTime = s.LastUsedTime.MustGetNull()
+	}
+	if s.UserID.IsValue() {
+		t.UserID = s.UserID.MustGet()
 	}
 }
 
@@ -246,6 +255,11 @@ func (s *APIKeySetter) Apply(q *dialect.InsertQuery) {
 				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
 			}
 			return psql.Arg(s.LastUsedTime.MustGetNull()).WriteSQL(ctx, w, d, start)
+		}), bob.ExpressionFunc(func(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+			if s.UserID.IsUnset() {
+				return psql.Raw("DEFAULT").WriteSQL(ctx, w, d, start)
+			}
+			return psql.Arg(s.UserID.MustGet()).WriteSQL(ctx, w, d, start)
 		}))
 }
 
@@ -254,7 +268,7 @@ func (s APIKeySetter) UpdateMod() bob.Mod[*dialect.UpdateQuery] {
 }
 
 func (s APIKeySetter) Expressions(prefix ...string) []bob.Expression {
-	exprs := make([]bob.Expression, 0, 7)
+	exprs := make([]bob.Expression, 0, 8)
 
 	if s.ID.IsValue() {
 		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
@@ -305,6 +319,13 @@ func (s APIKeySetter) Expressions(prefix ...string) []bob.Expression {
 		}})
 	}
 
+	if s.UserID.IsValue() {
+		exprs = append(exprs, expr.Join{Sep: " = ", Exprs: []bob.Expression{
+			psql.Quote(append(prefix, "user_id")...),
+			psql.Arg(s.UserID),
+		}})
+	}
+
 	return exprs
 }
 
@@ -315,7 +336,7 @@ func apiKeyScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func
 		idx int
 		dst func(o *APIKey) any
 	}
-	targets := make([]target, 0, 7)
+	targets := make([]target, 0, 8)
 	for i, col := range cols {
 		switch col {
 		case "id":
@@ -332,6 +353,8 @@ func apiKeyScanMapper(ctx context.Context, cols []string) (scan.BeforeFunc, func
 			targets = append(targets, target{i, func(o *APIKey) any { return &o.RevokeTime }})
 		case "last_used_time":
 			targets = append(targets, target{i, func(o *APIKey) any { return &o.LastUsedTime }})
+		case "user_id":
+			targets = append(targets, target{i, func(o *APIKey) any { return &o.UserID }})
 		}
 	}
 
@@ -607,34 +630,6 @@ func (o APIKeySlice) ReloadAll(ctx context.Context, exec bob.Executor) error {
 	return nil
 }
 
-// Roles starts a query for related objects on roles
-func (o *APIKey) Roles(mods ...bob.Mod[*dialect.SelectQuery]) RolesQuery {
-	return Roles.Query(append(mods,
-		sm.InnerJoin(APIKeyRoles.NameAsExpr()).On(
-			Roles.Columns.Name.EQ(APIKeyRoles.Columns.RoleName)),
-		sm.Where(APIKeyRoles.Columns.APIKeyID.EQ(psql.Arg(o.ID))),
-	)...)
-}
-
-func (os APIKeySlice) Roles(mods ...bob.Mod[*dialect.SelectQuery]) RolesQuery {
-	pkID := make(pgtypes.Array[uuid.UUID], 0, len(os))
-
-	for _, o := range os {
-		if o == nil {
-			continue
-		}
-		pkID = append(pkID, o.ID)
-	}
-	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "uuid[]"))
-
-	return Roles.Query(append(mods,
-		sm.InnerJoin(APIKeyRoles.NameAsExpr()).On(
-			Roles.Columns.Name.EQ(APIKeyRoles.Columns.RoleName),
-		),
-		sm.Where(APIKeyRoles.Columns.APIKeyID.EQ(PKArgExpr)),
-	)...)
-}
-
 // APIKeyScopes starts a query for related objects on api_key_scopes
 func (o *APIKey) APIKeyScopes(mods ...bob.Mod[*dialect.SelectQuery]) APIKeyScopesQuery {
 	return APIKeyScopes.Query(append(mods,
@@ -658,69 +653,34 @@ func (os APIKeySlice) APIKeyScopes(mods ...bob.Mod[*dialect.SelectQuery]) APIKey
 	)...)
 }
 
-func attachAPIKeyRoles0(ctx context.Context, exec bob.Executor, count int, apiKey0 *APIKey, roles2 RoleSlice) (APIKeyRoleSlice, error) {
-	setters := make([]*APIKeyRoleSetter, count)
-	for i := range count {
-		setters[i] = &APIKeyRoleSetter{
-			APIKeyID: omit.From(apiKey0.ID),
-			RoleName: omit.From(roles2[i].Name),
+// User starts a query for related objects on users
+func (o *APIKey) User(mods ...bob.Mod[*dialect.SelectQuery]) UsersQuery {
+	return Users.Query(append(mods,
+		sm.Where(Users.Columns.ID.EQ(psql.Arg(o.UserID))),
+	)...)
+}
+
+func (os APIKeySlice) User(mods ...bob.Mod[*dialect.SelectQuery]) UsersQuery {
+	pkUserID := make(pgtypes.Array[int64], 0, len(os))
+
+	// the array is only a filter (semi-join), so duplicate keys can be
+	// dropped before they are sent over the wire
+	seenUserID := make(map[int64]struct{}, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
 		}
+		if _, ok := seenUserID[o.UserID]; ok {
+			continue
+		}
+		seenUserID[o.UserID] = struct{}{}
+		pkUserID = append(pkUserID, o.UserID)
 	}
+	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkUserID), "bigint[]"))
 
-	apiKeyRoles1, err := APIKeyRoles.Insert(bob.ToMods(setters...)).All(ctx, exec)
-	if err != nil {
-		return nil, fmt.Errorf("attachAPIKeyRoles0: %w", err)
-	}
-
-	return apiKeyRoles1, nil
-}
-
-func (apiKey0 *APIKey) InsertRoles(ctx context.Context, exec bob.Executor, related ...*RoleSetter) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-
-	inserted, err := Roles.Insert(bob.ToMods(related...)).All(ctx, exec)
-	if err != nil {
-		return fmt.Errorf("inserting related objects: %w", err)
-	}
-	roles2 := RoleSlice(inserted)
-
-	_, err = attachAPIKeyRoles0(ctx, exec, len(related), apiKey0, roles2)
-	if err != nil {
-		return err
-	}
-
-	apiKey0.R.Roles = append(apiKey0.R.Roles, roles2...)
-
-	for _, rel := range roles2 {
-		rel.R.APIKeys = append(rel.R.APIKeys, apiKey0)
-	}
-	return nil
-}
-
-func (apiKey0 *APIKey) AttachRoles(ctx context.Context, exec bob.Executor, related ...*Role) error {
-	if len(related) == 0 {
-		return nil
-	}
-
-	var err error
-	roles2 := RoleSlice(related)
-
-	_, err = attachAPIKeyRoles0(ctx, exec, len(related), apiKey0, roles2)
-	if err != nil {
-		return err
-	}
-
-	apiKey0.R.Roles = append(apiKey0.R.Roles, roles2...)
-
-	for _, rel := range related {
-		rel.R.APIKeys = append(rel.R.APIKeys, apiKey0)
-	}
-
-	return nil
+	return Users.Query(append(mods,
+		sm.Where(Users.Columns.ID.EQ(PKArgExpr)),
+	)...)
 }
 
 func insertAPIKeyAPIKeyScopes0(ctx context.Context, exec bob.Executor, apiKeyScopes1 []*APIKeyScopeSetter, apiKey0 *APIKey) (APIKeyScopeSlice, error) {
@@ -793,6 +753,56 @@ func (apiKey0 *APIKey) AttachAPIKeyScopes(ctx context.Context, exec bob.Executor
 	return nil
 }
 
+func attachAPIKeyUser0(ctx context.Context, exec bob.Executor, count int, apiKey0 *APIKey, user1 *User) (*APIKey, error) {
+	setter := &APIKeySetter{
+		UserID: omit.From(user1.ID),
+	}
+
+	err := apiKey0.Update(ctx, exec, setter)
+	if err != nil {
+		return nil, fmt.Errorf("attachAPIKeyUser0: %w", err)
+	}
+
+	return apiKey0, nil
+}
+
+func (apiKey0 *APIKey) InsertUser(ctx context.Context, exec bob.Executor, related *UserSetter) error {
+	var err error
+
+	user1, err := Users.Insert(related).One(ctx, exec)
+	if err != nil {
+		return fmt.Errorf("inserting related objects: %w", err)
+	}
+
+	_, err = attachAPIKeyUser0(ctx, exec, 1, apiKey0, user1)
+	if err != nil {
+		return err
+	}
+
+	apiKey0.R.User = user1
+	apiKey0.R.Loaded.User = true
+
+	user1.R.APIKeys = append(user1.R.APIKeys, apiKey0)
+
+	return nil
+}
+
+func (apiKey0 *APIKey) AttachUser(ctx context.Context, exec bob.Executor, user1 *User) error {
+	var err error
+
+	_, err = attachAPIKeyUser0(ctx, exec, 1, apiKey0, user1)
+	if err != nil {
+		return err
+	}
+
+	apiKey0.R.User = user1
+	apiKey0.R.Loaded.User = true
+
+	user1.R.APIKeys = append(user1.R.APIKeys, apiKey0)
+
+	return nil
+}
+
 type apiKeyWhere[Q psql.Filterable] struct {
 	cols         apiKeyColumns
 	ID           psql.WhereMod[Q, uuid.UUID]
@@ -802,6 +812,7 @@ type apiKeyWhere[Q psql.Filterable] struct {
 	ExpireTime   psql.WhereNullMod[Q, time.Time]
 	RevokeTime   psql.WhereNullMod[Q, time.Time]
 	LastUsedTime psql.WhereNullMod[Q, time.Time]
+	UserID       psql.WhereMod[Q, int64]
 	R            apiKeyWhereR[Q]
 }
 
@@ -819,6 +830,7 @@ func buildAPIKeyWhere[Q psql.Filterable](cols apiKeyColumns) apiKeyWhere[Q] {
 		ExpireTime:   psql.WhereNull[Q, time.Time](cols.ExpireTime.Expression),
 		RevokeTime:   psql.WhereNull[Q, time.Time](cols.RevokeTime.Expression),
 		LastUsedTime: psql.WhereNull[Q, time.Time](cols.LastUsedTime.Expression),
+		UserID:       psql.Where[Q, int64](cols.UserID.Expression),
 		R:            apiKeyWhereR[Q]{cols: cols},
 	}
 }
@@ -844,18 +856,15 @@ func (w apiKeyWhereR[Q]) HasAPIKeyScopes(filters ...bob.Mod[*dialect.SelectQuery
 	return mods.Where[Q]{E: psql.Exists(q)}
 }
 
-// HasRoles filters parents that have a matching Roles (a
-// many-to-many relationship) using a correlated EXISTS subquery instead of
-// INNER JOINs, so the parent rows are not multiplied. The optional filters are
-// applied to the subquery (i.e. to Roles).
-func (w apiKeyWhereR[Q]) HasRoles(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
+// HasUser filters parents that have a matching User using a
+// correlated EXISTS subquery (semi-join). Unlike an INNER JOIN it does not
+// multiply parent rows, so no DISTINCT is needed. The optional filters are
+// applied to the subquery (i.e. to Users).
+func (w apiKeyWhereR[Q]) HasUser(filters ...bob.Mod[*dialect.SelectQuery]) mods.Where[Q] {
 	q := psql.Select(
 		sm.Columns(psql.Raw("1")),
-		sm.From(APIKeyRoles.NameExpr()),
-		sm.InnerJoin(Roles.NameExpr()).On(
-			Roles.Columns.Name.EQ(APIKeyRoles.Columns.RoleName),
-		),
-		sm.Where(APIKeyRoles.Columns.APIKeyID.EQ(w.cols.ID)),
+		sm.From(Users.NameExpr()),
+		sm.Where(Users.Columns.ID.EQ(w.cols.UserID)),
 	)
 	q.Apply(filters...)
 	return mods.Where[Q]{E: psql.Exists(q)}
@@ -872,6 +881,7 @@ type apiKeyPreloadBuf struct {
 	ExpireTime   null.Val[time.Time]
 	RevokeTime   null.Val[time.Time]
 	LastUsedTime null.Val[time.Time]
+	UserID       null.Val[int64]
 }
 
 // apiKeyScanMapperNullable maps the preloaded apiKey
@@ -886,7 +896,7 @@ func apiKeyScanMapperNullable(prefix string) scan.Mapper[*APIKey] {
 			idx int
 			dst func(b *apiKeyPreloadBuf) any
 		}
-		targets := make([]target, 0, 7)
+		targets := make([]target, 0, 8)
 		for i, col := range cols {
 			name, ok := strings.CutPrefix(col, prefix)
 			if !ok {
@@ -907,6 +917,8 @@ func apiKeyScanMapperNullable(prefix string) scan.Mapper[*APIKey] {
 				targets = append(targets, target{i, func(b *apiKeyPreloadBuf) any { return &b.RevokeTime }})
 			case "last_used_time":
 				targets = append(targets, target{i, func(b *apiKeyPreloadBuf) any { return &b.LastUsedTime }})
+			case "user_id":
+				targets = append(targets, target{i, func(b *apiKeyPreloadBuf) any { return &b.UserID }})
 			}
 		}
 
@@ -935,7 +947,8 @@ func apiKeyScanMapperNullable(prefix string) scan.Mapper[*APIKey] {
 					!(buf.CreateTime.IsValue()) &&
 					!(buf.ExpireTime.IsValue()) &&
 					!(buf.RevokeTime.IsValue()) &&
-					!(buf.LastUsedTime.IsValue()) {
+					!(buf.LastUsedTime.IsValue()) &&
+					!(buf.UserID.IsValue()) {
 					return nil, nil
 				}
 
@@ -955,6 +968,9 @@ func apiKeyScanMapperNullable(prefix string) scan.Mapper[*APIKey] {
 				o.ExpireTime = buf.ExpireTime
 				o.RevokeTime = buf.RevokeTime
 				o.LastUsedTime = buf.LastUsedTime
+				if buf.UserID.IsValue() {
+					o.UserID = buf.UserID.MustGet()
+				}
 				return o, nil
 			}
 	}
@@ -966,21 +982,6 @@ func (o *APIKey) Preload(name string, retrieved any) error {
 	}
 
 	switch name {
-	case "Roles":
-		rels, ok := retrieved.(RoleSlice)
-		if !ok {
-			return fmt.Errorf("apiKey cannot load %T as %q", retrieved, name)
-		}
-
-		o.R.Roles = rels
-		o.R.Loaded.Roles = true
-
-		for _, rel := range rels {
-			if rel != nil {
-				rel.R.APIKeys = APIKeySlice{o}
-			}
-		}
-		return nil
 	case "APIKeyScopes":
 		rels, ok := retrieved.(APIKeyScopeSlice)
 		if !ok {
@@ -997,155 +998,73 @@ func (o *APIKey) Preload(name string, retrieved any) error {
 			}
 		}
 		return nil
+	case "User":
+		rel, ok := retrieved.(*User)
+		if !ok {
+			return fmt.Errorf("apiKey cannot load %T as %q", retrieved, name)
+		}
+
+		o.R.User = rel
+		o.R.Loaded.User = true
+
+		if rel != nil {
+			rel.R.APIKeys = APIKeySlice{o}
+		}
+		return nil
 	default:
 		return fmt.Errorf("apiKey has no relationship %q", name)
 	}
 }
 
-type apiKeyPreloader struct{}
+type apiKeyPreloader struct {
+	User func(...psql.PreloadOption) psql.Preloader
+}
 
 func buildAPIKeyPreloader() apiKeyPreloader {
-	return apiKeyPreloader{}
+	return apiKeyPreloader{
+		User: func(opts ...psql.PreloadOption) psql.Preloader {
+			return psql.Preload[*User, UserSlice](psql.PreloadRel{
+				Name: "User",
+				Sides: []psql.PreloadSide{
+					{
+						From:        APIKeys,
+						To:          Users,
+						FromColumns: []string{"user_id"},
+						ToColumns:   []string{"id"},
+					},
+				},
+			}, Users.Columns.Names(), userScanMapperNullable, opts...)
+		},
+	}
 }
 
 type apiKeyThenLoader[Q orm.Loadable] struct {
-	Roles        func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 	APIKeyScopes func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
+	User         func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 }
 
 func buildAPIKeyThenLoader[Q orm.Loadable]() apiKeyThenLoader[Q] {
-	type RolesLoadInterface interface {
-		LoadRoles(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
-	}
 	type APIKeyScopesLoadInterface interface {
 		LoadAPIKeyScopes(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
 	}
+	type UserLoadInterface interface {
+		LoadUser(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
+	}
 
 	return apiKeyThenLoader[Q]{
-		Roles: thenLoadBuilder[Q](
-			"Roles",
-			func(ctx context.Context, exec bob.Executor, retrieved RolesLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
-				return retrieved.LoadRoles(ctx, exec, mods...)
-			},
-		),
 		APIKeyScopes: thenLoadBuilder[Q](
 			"APIKeyScopes",
 			func(ctx context.Context, exec bob.Executor, retrieved APIKeyScopesLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
 				return retrieved.LoadAPIKeyScopes(ctx, exec, mods...)
 			},
 		),
-	}
-}
-
-// LoadRoles loads the apiKey's Roles into the .R struct
-func (o *APIKey) LoadRoles(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
-	if o == nil {
-		return nil
-	}
-
-	// Reset the relationship
-	o.R.Roles = nil
-	o.R.Loaded.Roles = false
-
-	related, err := o.Roles(mods...).All(ctx, exec)
-	if err != nil {
-		return err
-	}
-
-	for _, rel := range related {
-		rel.R.APIKeys = APIKeySlice{o}
-	}
-
-	o.R.Roles = related
-	o.R.Loaded.Roles = true
-	return nil
-}
-
-// LoadRoles loads the apiKey's Roles into the .R struct
-func (os APIKeySlice) LoadRoles(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
-	if len(os) == 0 {
-		return nil
-	}
-
-	q := os.Roles(append(
-		mods,
-		// since we are changing the columns, the defaults must be added if the
-		// original mods did not set any; this runs after the user mods and
-		// before the related_* columns below, so it sees exactly what they set
-		bob.ModFunc[*dialect.SelectQuery](func(q *dialect.SelectQuery) {
-			if len(q.SelectList.Columns) == 0 {
-				sm.Columns(Roles.Columns).Apply(q)
-			}
-		}),
-		sm.Columns(APIKeyRoles.Columns.APIKeyID.As("related_api_keys.ID")),
-	)...)
-
-	IDSlice := make([]uuid.UUID, 0, len(os))
-
-	mapper := scan.Mod(q.Scanner, func(ctx context.Context, cols []string) (scan.BeforeFunc, func(any, any) error) {
-		// Resolve each joined key column name to its index once per query. The
-		// previous code scanned by name on every row, which meant a linear column
-		// search per row; the columns are added by this loader so they are always
-		// present, but an unselected column simply stays unresolved and is skipped.
-		IDIdx := -1
-		for i, col := range cols {
-			switch col {
-			case "related_api_keys.ID":
-				IDIdx = i
-			}
-		}
-
-		return func(row *scan.Row) (any, error) {
-				IDSlice = append(IDSlice, *new(uuid.UUID))
-				if IDIdx >= 0 {
-					row.ScheduleScanByIndex(IDIdx, &IDSlice[len(IDSlice)-1])
-				}
-
-				return nil, nil
+		User: thenLoadBuilder[Q](
+			"User",
+			func(ctx context.Context, exec bob.Executor, retrieved UserLoadInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
+				return retrieved.LoadUser(ctx, exec, mods...)
 			},
-			func(any, any) error {
-				return nil
-			}
-	})
-
-	roles, err := bob.Allx[bob.SliceTransformer[*Role, RoleSlice]](ctx, exec, q, mapper)
-	if err != nil {
-		return err
+		),
 	}
-
-	for _, o := range os {
-		if o == nil {
-			continue
-		}
-		o.R.Roles = nil
-		o.R.Loaded.Roles = true
-	}
-	// O(N+M) stitch via a map; child key is the carried slice IDSlice[i] (was O(N*M)).
-	apiKeyByKey := make(map[uuid.UUID][]*APIKey, len(os))
-	for _, o := range os {
-		if o == nil {
-			continue
-		}
-
-		apiKeyByKey[o.ID] = append(apiKeyByKey[o.ID], o)
-	}
-
-	for i, rel := range roles {
-		owners, ok := apiKeyByKey[IDSlice[i]]
-		if !ok {
-			continue
-		}
-
-		for _, o := range owners {
-
-			rel.R.APIKeys = append(rel.R.APIKeys, o)
-
-			o.R.Roles = append(o.R.Roles, rel)
-
-		}
-	}
-
-	return nil
 }
 
 // LoadAPIKeyScopes loads the apiKey's APIKeyScopes into the .R struct
@@ -1222,9 +1141,83 @@ func (os APIKeySlice) LoadAPIKeyScopes(ctx context.Context, exec bob.Executor, m
 	return nil
 }
 
+// LoadUser loads the apiKey's User into the .R struct
+func (o *APIKey) LoadUser(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if o == nil {
+		return nil
+	}
+
+	// Reset the relationship
+	o.R.User = nil
+	o.R.Loaded.User = false
+
+	related, err := o.User(mods...).One(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	related.R.APIKeys = APIKeySlice{o}
+
+	o.R.User = related
+	o.R.Loaded.User = true
+	return nil
+}
+
+// LoadUser loads the apiKey's User into the .R struct
+func (os APIKeySlice) LoadUser(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
+	if len(os) == 0 {
+		return nil
+	}
+
+	users, err := os.User(mods...).All(ctx, exec)
+	if err != nil {
+		return err
+	}
+
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		o.R.User = nil
+		o.R.Loaded.User = true
+	}
+	// O(N+M) stitch via a map keyed by the join column (key -> []parent; was O(N*M)).
+	apiKeyByKey := make(map[int64][]*APIKey, len(os))
+	for _, o := range os {
+		if o == nil {
+			continue
+		}
+
+		apiKeyByKey[o.UserID] = append(apiKeyByKey[o.UserID], o)
+	}
+
+	for _, rel := range users {
+
+		owners, ok := apiKeyByKey[rel.ID]
+		if !ok {
+			continue
+		}
+
+		for _, o := range owners {
+
+			// to-one: keep only the first matching child (matches the previous break)
+			if o.R.User != nil {
+				continue
+			}
+
+			rel.R.APIKeys = append(rel.R.APIKeys, o)
+
+			o.R.User = rel
+
+		}
+	}
+
+	return nil
+}
+
 // apiKeyC is where relationship counts are stored.
 type apiKeyC struct {
-	Roles        *int64
 	APIKeyScopes *int64
 }
 
@@ -1235,8 +1228,6 @@ func (o *APIKey) PreloadCount(name string, count int64) error {
 	}
 
 	switch name {
-	case "Roles":
-		o.C.Roles = &count
 	case "APIKeyScopes":
 		o.C.APIKeyScopes = &count
 	}
@@ -1244,32 +1235,11 @@ func (o *APIKey) PreloadCount(name string, count int64) error {
 }
 
 type apiKeyCountPreloader struct {
-	Roles        func(...bob.Mod[*dialect.SelectQuery]) psql.Preloader
 	APIKeyScopes func(...bob.Mod[*dialect.SelectQuery]) psql.Preloader
 }
 
 func buildAPIKeyCountPreloader() apiKeyCountPreloader {
 	return apiKeyCountPreloader{
-		Roles: func(mods ...bob.Mod[*dialect.SelectQuery]) psql.Preloader {
-			return countPreloader[*APIKey]("Roles", func(parent string) bob.Expression {
-				// Build a correlated subquery: (SELECT COUNT(*) FROM related WHERE fk = parent.pk)
-				if parent == "" {
-					parent = APIKeys.Alias()
-				}
-
-				subqueryMods := []bob.Mod[*dialect.SelectQuery]{
-					sm.Columns(psql.Raw("count(*)")),
-
-					sm.From(APIKeyRoles.NameAsExpr()),
-					sm.Where(psql.Quote(APIKeyRoles.Alias(), "api_key_id").EQ(psql.Quote(parent, "id"))),
-					sm.InnerJoin(Roles.NameAsExpr()).On(
-						psql.Quote(Roles.Alias(), "name").EQ(psql.Quote(APIKeyRoles.Alias(), "role_name")),
-					),
-				}
-				subqueryMods = append(subqueryMods, mods...)
-				return psql.Group(psql.Select(subqueryMods...).Expression)
-			})
-		},
 		APIKeyScopes: func(mods ...bob.Mod[*dialect.SelectQuery]) psql.Preloader {
 			return countPreloader[*APIKey]("APIKeyScopes", func(parent string) bob.Expression {
 				// Build a correlated subquery: (SELECT COUNT(*) FROM related WHERE fk = parent.pk)
@@ -1291,25 +1261,15 @@ func buildAPIKeyCountPreloader() apiKeyCountPreloader {
 }
 
 type apiKeyCountThenLoader[Q orm.Loadable] struct {
-	Roles        func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 	APIKeyScopes func(...bob.Mod[*dialect.SelectQuery]) orm.Loader[Q]
 }
 
 func buildAPIKeyCountThenLoader[Q orm.Loadable]() apiKeyCountThenLoader[Q] {
-	type RolesCountInterface interface {
-		LoadCountRoles(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
-	}
 	type APIKeyScopesCountInterface interface {
 		LoadCountAPIKeyScopes(context.Context, bob.Executor, ...bob.Mod[*dialect.SelectQuery]) error
 	}
 
 	return apiKeyCountThenLoader[Q]{
-		Roles: countThenLoadBuilder[Q](
-			"Roles",
-			func(ctx context.Context, exec bob.Executor, retrieved RolesCountInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
-				return retrieved.LoadCountRoles(ctx, exec, mods...)
-			},
-		),
 		APIKeyScopes: countThenLoadBuilder[Q](
 			"APIKeyScopes",
 			func(ctx context.Context, exec bob.Executor, retrieved APIKeyScopesCountInterface, mods ...bob.Mod[*dialect.SelectQuery]) error {
@@ -1317,88 +1277,6 @@ func buildAPIKeyCountThenLoader[Q orm.Loadable]() apiKeyCountThenLoader[Q] {
 			},
 		),
 	}
-}
-
-// LoadCountRoles loads the count of Roles into the C struct
-func (o *APIKey) LoadCountRoles(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
-	if o == nil {
-		return nil
-	}
-
-	count, err := o.Roles(mods...).Count(ctx, exec)
-	if err != nil {
-		return err
-	}
-
-	o.C.Roles = &count
-	return nil
-}
-
-// LoadCountRoles loads the count of Roles for a slice in a single batch query
-func (os APIKeySlice) LoadCountRoles(ctx context.Context, exec bob.Executor, mods ...bob.Mod[*dialect.SelectQuery]) error {
-	if len(os) == 0 {
-		return nil
-	}
-
-	// Build the IN arg expression from parent PKs
-
-	pkID := make(pgtypes.Array[uuid.UUID], 0, len(os))
-	for _, o := range os {
-		if o == nil {
-			continue
-		}
-		pkID = append(pkID, o.ID)
-	}
-	PKArgExpr := psql.Any(psql.Cast(psql.Arg(pkID), "uuid[]"))
-
-	// countResult holds one scanned row from the batch count query.
-	// FK columns are aliased to the parent PK column names for direct map lookup.
-	type countResult struct {
-		ID    uuid.UUID
-		Count int64
-	}
-
-	batchMods := []bob.Mod[*dialect.SelectQuery]{
-		// SELECT fk AS parent_pk, count(*)
-		sm.Columns(
-			APIKeyRoles.Columns.APIKeyID.As("id"),
-			psql.Raw("count(*) as count"),
-		),
-		// Multi-hop: FROM first join table, JOIN through to final related table
-		sm.From(APIKeyRoles.NameAsExpr()),
-		sm.InnerJoin(Roles.NameAsExpr()).On(
-			Roles.Columns.Name.EQ(APIKeyRoles.Columns.RoleName),
-		),
-
-		// WHERE fk IN (parent PKs) — psql single-column FK uses `= ANY(array)` (see PKArgExpr above)
-		sm.Where(APIKeyRoles.Columns.APIKeyID.EQ(PKArgExpr)),
-		// GROUP BY fk columns
-		sm.GroupBy(APIKeyRoles.Columns.APIKeyID),
-	}
-	batchMods = append(batchMods, mods...)
-
-	results, err := bob.All(ctx, exec,
-		psql.Select(batchMods...),
-		scan.StructMapper[countResult](),
-	)
-	if err != nil {
-		return err
-	}
-
-	// Single-column FK: direct map lookup
-	countMap := make(map[uuid.UUID]int64, len(results))
-	for _, r := range results {
-		countMap[r.ID] = r.Count
-	}
-	for _, o := range os {
-		if o == nil {
-			continue
-		}
-		count := countMap[o.ID]
-		o.C.Roles = &count
-	}
-
-	return nil
 }
 
 // LoadCountAPIKeyScopes loads the count of APIKeyScopes into the C struct
@@ -1482,8 +1360,8 @@ func (os APIKeySlice) LoadCountAPIKeyScopes(ctx context.Context, exec bob.Execut
 
 type apiKeyJoins[Q dialect.Joinable] struct {
 	typ          string
-	Roles        modAs[Q, roleColumns]
 	APIKeyScopes modAs[Q, apiKeyScopeColumns]
+	User         modAs[Q, userColumns]
 }
 
 func (j apiKeyJoins[Q]) aliasedAs(alias string) apiKeyJoins[Q] {
@@ -1493,28 +1371,6 @@ func (j apiKeyJoins[Q]) aliasedAs(alias string) apiKeyJoins[Q] {
 func buildAPIKeyJoins[Q dialect.Joinable](cols apiKeyColumns, typ string) apiKeyJoins[Q] {
 	return apiKeyJoins[Q]{
 		typ: typ,
-		Roles: modAs[Q, roleColumns]{
-			c: Roles.Columns,
-			f: func(to roleColumns) bob.Mod[Q] {
-				uniqueSuffix := strconv.FormatUint(bob.NextUniqueInt(), 10)
-				mods := make(mods.QueryMods[Q], 0, 2)
-
-				{
-					to := APIKeyRoles.Columns.AliasedAs(APIKeyRoles.Columns.Alias() + uniqueSuffix)
-					mods = append(mods, dialect.Join[Q](typ, APIKeyRoles.NameExpr().As(to.Alias())).On(
-						to.APIKeyID.EQ(cols.ID),
-					))
-				}
-				{
-					cols := APIKeyRoles.Columns.AliasedAs(APIKeyRoles.Columns.Alias() + uniqueSuffix)
-					mods = append(mods, dialect.Join[Q](typ, Roles.NameExpr().As(to.Alias())).On(
-						to.Name.EQ(cols.RoleName),
-					))
-				}
-
-				return mods
-			},
-		},
 		APIKeyScopes: modAs[Q, apiKeyScopeColumns]{
 			c: APIKeyScopes.Columns,
 			f: func(to apiKeyScopeColumns) bob.Mod[Q] {
@@ -1523,6 +1379,20 @@ func buildAPIKeyJoins[Q dialect.Joinable](cols apiKeyColumns, typ string) apiKey
 				{
 					mods = append(mods, dialect.Join[Q](typ, APIKeyScopes.NameExpr().As(to.Alias())).On(
 						to.APIKeyID.EQ(cols.ID),
+					))
+				}
+
+				return mods
+			},
+		},
+		User: modAs[Q, userColumns]{
+			c: Users.Columns,
+			f: func(to userColumns) bob.Mod[Q] {
+				mods := make(mods.QueryMods[Q], 0, 1)
+
+				{
+					mods = append(mods, dialect.Join[Q](typ, Users.NameExpr().As(to.Alias())).On(
+						to.ID.EQ(cols.UserID),
 					))
 				}
 

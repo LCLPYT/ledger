@@ -20,14 +20,14 @@ import (
 //go:embed auth.bob.sql
 var formattedQueries_auth string
 
-var apiKeyPermissionsSQL = formattedQueries_auth[155:287]
+var apiKeyPermissionsSQL = formattedQueries_auth[155:317]
 
 type ApiKeyPermissionsQuery = orm.ModQuery[*dialect.SelectQuery, apiKeyPermissions, string, []string, apiKeyPermissionsTransformer]
 
-func ApiKeyPermissions(APIKeyID uuid.UUID) *ApiKeyPermissionsQuery {
+func ApiKeyPermissions(ID uuid.UUID) *ApiKeyPermissionsQuery {
 	var expressionTypArgs apiKeyPermissions
 
-	expressionTypArgs.APIKeyID = psql.Arg(APIKeyID)
+	expressionTypArgs.ID = psql.Arg(ID)
 
 	return &ApiKeyPermissionsQuery{
 		Query: orm.Query[apiKeyPermissions, string, []string, apiKeyPermissionsTransformer]{
@@ -43,8 +43,8 @@ func ApiKeyPermissions(APIKeyID uuid.UUID) *ApiKeyPermissionsQuery {
 		Mod: bob.ModFunc[*dialect.SelectQuery](func(q *dialect.SelectQuery) {
 			q.Distinct.On = []any{}
 			q.AppendSelect(expressionTypArgs.subExpr(16, 29))
-			q.SetTable(expressionTypArgs.subExpr(35, 107))
-			q.AppendWhere(expressionTypArgs.subExpr(114, 132))
+			q.SetTable(expressionTypArgs.subExpr(35, 146))
+			q.AppendWhere(expressionTypArgs.subExpr(153, 162))
 		}),
 		Build: psql.Select,
 	}
@@ -57,16 +57,16 @@ type ApiKeyPermissionsRow = struct {
 type apiKeyPermissionsTransformer = bob.SliceTransformer[string, []string]
 
 type apiKeyPermissions struct {
-	APIKeyID bob.Expression
+	ID bob.Expression
 }
 
 func (o apiKeyPermissions) args() iter.Seq[orm.ArgWithPosition] {
 	return func(yield func(arg orm.ArgWithPosition) bool) {
 		if !yield(orm.ArgWithPosition{
-			Name:       "apiKeyID",
-			Start:      130,
-			Stop:       132,
-			Expression: o.APIKeyID,
+			Name:       "id",
+			Start:      160,
+			Stop:       162,
+			Expression: o.ID,
 		}) {
 			return
 		}
@@ -85,7 +85,7 @@ func (o apiKeyPermissions) WriteSQL(ctx context.Context, w io.StringWriter, d bo
 	return o.subExpr(0, len(apiKeyPermissionsSQL)).WriteSQL(ctx, w, d, start)
 }
 
-var apiKeyScopesSQL = formattedQueries_auth[306:365]
+var apiKeyScopesSQL = formattedQueries_auth[336:395]
 
 type ApiKeyScopesQuery = orm.ModQuery[*dialect.SelectQuery, apiKeyScopes, string, []string, apiKeyScopesTransformer]
 
@@ -147,4 +147,69 @@ func (o apiKeyScopes) subExpr(from, to int) bob.Expression {
 
 func (o apiKeyScopes) WriteSQL(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
 	return o.subExpr(0, len(apiKeyScopesSQL)).WriteSQL(ctx, w, d, start)
+}
+
+var userPermissionsSQL = formattedQueries_auth[417:543]
+
+type UserPermissionsQuery = orm.ModQuery[*dialect.SelectQuery, userPermissions, string, []string, userPermissionsTransformer]
+
+func UserPermissions(UserID int64) *UserPermissionsQuery {
+	var expressionTypArgs userPermissions
+
+	expressionTypArgs.UserID = psql.Arg(UserID)
+
+	return &UserPermissionsQuery{
+		Query: orm.Query[userPermissions, string, []string, userPermissionsTransformer]{
+			ExecQuery: orm.ExecQuery[userPermissions]{
+				BaseQuery: bob.BaseQuery[userPermissions]{
+					Expression: expressionTypArgs,
+					Dialect:    dialect.Dialect,
+					QueryType:  bob.QueryTypeSelect,
+				},
+			},
+			Scanner: scan.ColumnMapper[string]("permission"),
+		},
+		Mod: bob.ModFunc[*dialect.SelectQuery](func(q *dialect.SelectQuery) {
+			q.Distinct.On = []any{}
+			q.AppendSelect(expressionTypArgs.subExpr(16, 29))
+			q.SetTable(expressionTypArgs.subExpr(35, 104))
+			q.AppendWhere(expressionTypArgs.subExpr(111, 126))
+		}),
+		Build: psql.Select,
+	}
+}
+
+type UserPermissionsRow = struct {
+	Permission string `db:"permission"`
+}
+
+type userPermissionsTransformer = bob.SliceTransformer[string, []string]
+
+type userPermissions struct {
+	UserID bob.Expression
+}
+
+func (o userPermissions) args() iter.Seq[orm.ArgWithPosition] {
+	return func(yield func(arg orm.ArgWithPosition) bool) {
+		if !yield(orm.ArgWithPosition{
+			Name:       "userID",
+			Start:      124,
+			Stop:       126,
+			Expression: o.UserID,
+		}) {
+			return
+		}
+	}
+}
+
+func (o userPermissions) raw(from, to int) string {
+	return userPermissionsSQL[from:to]
+}
+
+func (o userPermissions) subExpr(from, to int) bob.Expression {
+	return orm.ArgsToExpression(userPermissionsSQL, from, to, o.args())
+}
+
+func (o userPermissions) WriteSQL(ctx context.Context, w io.StringWriter, d bob.Dialect, start int) ([]any, error) {
+	return o.subExpr(0, len(userPermissionsSQL)).WriteSQL(ctx, w, d, start)
 }

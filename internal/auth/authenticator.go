@@ -83,6 +83,16 @@ func (a *Authenticator) Authenticate(ctx context.Context, token string) (*Princi
 		}
 	}
 
+	owner, err := model.FindUser(ctx, a.db, key.UserID)
+
+	if err != nil {
+		return nil, fmt.Errorf("auth: failed to look up the owner of api key %s: %w", id, err)
+	}
+
+	if owner.DeleteTime.IsValue() {
+		return nil, ErrInvalidToken
+	}
+
 	permissions, err := queries.ApiKeyPermissions(id).All(ctx, a.db)
 
 	if err != nil {

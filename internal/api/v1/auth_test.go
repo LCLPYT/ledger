@@ -49,7 +49,7 @@ func authedConn(token string) *grpc.ClientConn {
 
 var roleCounter atomic.Int64
 
-// createAPIKey stores a key holding one role with the permissions and returns its token.
+// createAPIKey stores a key owned by a new user holding one role with the permissions and returns its token.
 func createAPIKey(ctx context.Context, permissions ...string) string {
 	GinkgoHelper()
 
@@ -75,17 +75,25 @@ func createAPIKeyWith(ctx context.Context, setter *model.APIKeySetter, permissio
 		Expect(err).ToNot(HaveOccurred())
 	}
 
+	user, err := model.Users.Insert(&model.UserSetter{
+		Name:         omit.From(role + "_user"),
+		Email:        omit.From(role + "@example.com"),
+		PasswordHash: omit.From([]byte{}),
+	}).One(ctx, db)
+	Expect(err).ToNot(HaveOccurred())
+
+	_, err = model.UserRoles.Insert(&model.UserRoleSetter{
+		UserID:   omit.From(user.ID),
+		RoleName: omit.From(role),
+	}).One(ctx, db)
+	Expect(err).ToNot(HaveOccurred())
+
 	setter.ID = omit.From(id)
 	setter.Name = omit.From(role + "_key")
 	setter.SecretHash = omit.From(hash)
+	setter.UserID = omit.From(user.ID)
 
 	_, err = model.APIKeys.Insert(setter).One(ctx, db)
-	Expect(err).ToNot(HaveOccurred())
-
-	_, err = model.APIKeyRoles.Insert(&model.APIKeyRoleSetter{
-		APIKeyID: omit.From(id),
-		RoleName: omit.From(role),
-	}).One(ctx, db)
 	Expect(err).ToNot(HaveOccurred())
 
 	return token
@@ -178,6 +186,24 @@ var _ = Describe("Authentication", func() {
 				&model.APIKeySetter{ExpireTime: omitnull.From(time.Now().Add(-time.Minute))}, "*")
 
 			err := listGamesWith(ctx, authedConn(token))
+
+			Expect(err).To(HaveReason("INVALID_CREDENTIALS"))
+		})
+
+		It("rejects a key of a deleted user", func(ctx SpecContext) {
+			token := createAPIKey(ctx, "*")
+			id, _, _ := auth.ParseToken(token)
+
+			key, err := model.FindAPIKey(ctx, db, id)
+			Expect(err).ToNot(HaveOccurred())
+
+			_, err = model.Users.Update(
+				model.UserSetter{DeleteTime: omitnull.From(time.Now())}.UpdateMod(),
+				model.UpdateWhere.Users.ID.EQ(key.UserID),
+			).Exec(ctx, db)
+			Expect(err).ToNot(HaveOccurred())
+
+			err = listGamesWith(ctx, authedConn(token))
 
 			Expect(err).To(HaveReason("INVALID_CREDENTIALS"))
 		})

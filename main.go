@@ -7,7 +7,7 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/lclpyt/ledger/cmd"
+	"github.com/lclpyt/ledger/internal/cmd"
 )
 
 func main() {

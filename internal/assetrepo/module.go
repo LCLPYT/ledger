@@ -41,6 +41,20 @@ func (m *module) Name() string {
 	return "asset_repo"
 }
 
+func loadConfig(i do.Injector) (Config, error) {
+	cfg, err := config.Load(i, "asset_repo", configKey, Config{
+		Addr:        ":8080",
+		ConfigFile:  "",
+		GracePeriod: 5 * time.Second,
+	})
+
+	if err != nil {
+		return Config{}, fmt.Errorf("asset_repo: failed to load config: %w", err)
+	}
+
+	return cfg, nil
+}
+
 func (m *module) Provide(_ context.Context, i do.Injector) error {
 	log, err := logging.Component(i, m.Name())
 
@@ -50,14 +64,10 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 
 	m.log = log
 
-	m.cfg, err = config.Load(i, m.Name(), configKey, Config{
-		Addr:        ":8080",
-		ConfigFile:  "",
-		GracePeriod: 5 * time.Second,
-	})
+	m.cfg, err = loadConfig(i)
 
 	if err != nil {
-		return fmt.Errorf("asset_repo: failed to load config: %w", err)
+		return err
 	}
 
 	if m.cfg.ConfigFile == "" {
@@ -224,4 +234,29 @@ func (r *statusRecorder) ReadFrom(src io.Reader) (int64, error) {
 
 func (r *statusRecorder) Unwrap() http.ResponseWriter {
 	return r.ResponseWriter
+}
+
+// Permissions returns the read permissions of the configured private repos.
+func Permissions(i do.Injector) ([]string, error) {
+	cfg, err := loadConfig(i)
+
+	if err != nil || cfg.ConfigFile == "" {
+		return nil, err
+	}
+
+	repos, err := ReadConfig(cfg.ConfigFile)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var permissions []string
+
+	for _, repo := range repos.Repos {
+		if !repo.Public {
+			permissions = append(permissions, repo.ReadPermission())
+		}
+	}
+
+	return permissions, nil
 }

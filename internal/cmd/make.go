@@ -30,7 +30,7 @@ const (
 
 var makeCmd = &cobra.Command{
 	Use:   "make",
-	Short: "Creates various items such as users",
+	Short: "Creates app entities such as users",
 }
 
 func init() {
@@ -110,6 +110,7 @@ var makeUserCmd = &cobra.Command{
 		return withApp(cmd.Context(), wiring.Database(wiring.Config()),
 			func(ctx context.Context, i do.Injector) error {
 				db, err := do.Invoke[bob.DB](i)
+
 				if err != nil {
 					return err
 				}
@@ -123,6 +124,7 @@ func makeUser(ctx context.Context, db bob.DB) error {
 	reader := bufio.NewReader(os.Stdin)
 
 	username, err := readLine(reader, "Username: ")
+
 	if err != nil {
 		return err
 	}
@@ -132,11 +134,13 @@ func makeUser(ctx context.Context, db bob.DB) error {
 	}
 
 	rawEmail, err := readLine(reader, "Email: ")
+
 	if err != nil {
 		return err
 	}
 
 	email, err := normalizeEmail(rawEmail)
+
 	if err != nil {
 		return err
 	}
@@ -154,6 +158,7 @@ func makeUser(ctx context.Context, db bob.DB) error {
 	}
 
 	password, err := readSecret(reader, "Password: ")
+
 	if err != nil {
 		return err
 	}
@@ -163,6 +168,7 @@ func makeUser(ctx context.Context, db bob.DB) error {
 	}
 
 	confirmPassword, err := readSecret(reader, "Confirm password: ")
+
 	if err != nil {
 		return err
 	}

@@ -23,24 +23,28 @@ var (
 type preloadCounts struct {
 	APIKey apiKeyCountPreloader
 	Role   roleCountPreloader
+	User   userCountPreloader
 }
 
 func getPreloadCount() preloadCounts {
 	return preloadCounts{
 		APIKey: buildAPIKeyCountPreloader(),
 		Role:   buildRoleCountPreloader(),
+		User:   buildUserCountPreloader(),
 	}
 }
 
 type thenLoadCounts[Q orm.Loadable] struct {
 	APIKey apiKeyCountThenLoader[Q]
 	Role   roleCountThenLoader[Q]
+	User   userCountThenLoader[Q]
 }
 
 func getThenLoadCount[Q orm.Loadable]() thenLoadCounts[Q] {
 	return thenLoadCounts[Q]{
 		APIKey: buildAPIKeyCountThenLoader[Q](),
 		Role:   buildRoleCountThenLoader[Q](),
+		User:   buildUserCountThenLoader[Q](),
 	}
 }
 

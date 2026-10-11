@@ -16,17 +16,7 @@ type Principal struct {
 }
 
 func (p *Principal) Can(permission string) bool {
-	return grantsAny(p.Permissions, permission) && (len(p.Scopes) == 0 || grantsAny(p.Scopes, permission))
-}
-
-func grantsAny(granted []string, required string) bool {
-	for _, g := range granted {
-		if Grants(g, required) {
-			return true
-		}
-	}
-
-	return false
+	return GrantsAny(p.Permissions, permission) && (len(p.Scopes) == 0 || GrantsAny(p.Scopes, permission))
 }
 
 type principalKey struct{}

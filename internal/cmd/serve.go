@@ -14,6 +14,7 @@ var serveCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		ctx := cmd.Context()
 		a, err := app.New(ctx, wiring.Serve(wiring.Config()))
+
 		if err != nil {
 			return fmt.Errorf("cmd: error initializing application: %w", err)
 		}

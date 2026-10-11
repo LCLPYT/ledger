@@ -73,6 +73,18 @@ var _ = Describe("Permissions", func() {
 		Entry("resource prefix is no wildcard", "games", "games.read", false),
 	)
 
+	It("adds every covering wildcard", func() {
+		Expect(auth.WithWildcards([]string{"games.read", "assets.read:maps", "games.write"})).To(Equal([]string{
+			"*",
+			"assets.*",
+			"assets.read:*",
+			"assets.read:maps",
+			"games.*",
+			"games.read",
+			"games.write",
+		}))
+	})
+
 	DescribeTable("ValidPermission",
 		func(permission string, expected bool) {
 			Expect(auth.ValidPermission(permission)).To(Equal(expected))

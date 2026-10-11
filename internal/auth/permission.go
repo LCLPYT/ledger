@@ -1,7 +1,9 @@
 package auth
 
 import (
+	"maps"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -25,4 +27,35 @@ func Grants(granted, required string) bool {
 	prefix, wildcard := strings.CutSuffix(granted, "*")
 
 	return wildcard && strings.HasPrefix(required, prefix)
+}
+
+func GrantsAny(granted []string, required string) bool {
+	for _, g := range granted {
+		if Grants(g, required) {
+			return true
+		}
+	}
+
+	return false
+}
+
+// WithWildcards adds every wildcard covering one of the permissions, e.g. "games.*" and "*" for "games.read".
+func WithWildcards(permissions []string) []string {
+	set := map[string]struct{}{"*": {}}
+
+	for _, p := range permissions {
+		set[p] = struct{}{}
+
+		base, _, scoped := strings.Cut(p, ":")
+
+		if scoped {
+			set[base+":*"] = struct{}{}
+		}
+
+		for i := strings.LastIndexByte(base, '.'); i > 0; i = strings.LastIndexByte(base[:i], '.') {
+			set[base[:i]+".*"] = struct{}{}
+		}
+	}
+
+	return slices.Sorted(maps.Keys(set))
 }
