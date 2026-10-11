@@ -72,5 +72,10 @@ Single underscores stay part of the key name.
 | `modules.logging.format`               | `text`    | `text` or `json`                                                         |
 | `modules.auth.cache_ttl`               | `30s`     | How long authenticated credentials are cached                            |
 | `modules.asset_repo.addr`              | `:8080`   | HTTP listen address of the asset repository                              |
-| `modules.asset_repo.config_file`       | empty     | Path to the asset repository config; the feature is disabled when empty  |
+| `modules.asset_repo.repos.<id>.path`   | required  | Directory served by the repo `<id>`, relative to the working directory   |
+| `modules.asset_repo.repos.<id>.public` | `false`   | Serves the repo without auth, otherwise `assets.read:<id>` is required   |
 | `modules.asset_repo.grace_period`      | `5s`      | Time in-flight requests get to finish on shutdown                        |
+
+The asset repository is disabled when no repos are configured.
+Repo ids have to match `^[a-z0-9_-]+$` and become part of the URL `/v1/assets/<id>/`.
+Since they are map keys, repos can be added or overridden via environment variables, e.g. `LEDGER__MODULES__ASSET_REPO__REPOS__PRIVATE__PATH`.

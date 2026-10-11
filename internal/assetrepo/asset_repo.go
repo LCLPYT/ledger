@@ -1,6 +1,7 @@
 package assetrepo
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"net/http"
@@ -9,9 +10,9 @@ import (
 )
 
 type AssetRepo struct {
-	Id     string `yaml:"id"`
-	Path   string `yaml:"path"`
-	Public bool   `yaml:"public"`
+	Id     string `config:"-"`
+	Path   string `config:"path" validate:"required"`
+	Public bool   `config:"public"`
 }
 
 func (r *AssetRepo) ReadPermission() string {
@@ -19,7 +20,7 @@ func (r *AssetRepo) ReadPermission() string {
 }
 
 func (r *AssetRepo) FileSystem() (http.FileSystem, error) {
-	err := r.CheckPath()
+	err := r.EnsurePath()
 
 	if err != nil {
 		return nil, err
@@ -28,8 +29,12 @@ func (r *AssetRepo) FileSystem() (http.FileSystem, error) {
 	return dotFileHidingFS{http.Dir(r.Path)}, nil
 }
 
-func (r *AssetRepo) CheckPath() error {
-	if info, err := os.Stat(r.Path); err != nil {
+func (r *AssetRepo) EnsurePath() error {
+	if info, err := os.Stat(r.Path); errors.Is(err, fs.ErrNotExist) {
+		if err := os.MkdirAll(r.Path, 0o755); err != nil {
+			return fmt.Errorf("asset_repo: failed to create repo %s directory at %s: %w", r.Id, r.Path, err)
+		}
+	} else if err != nil {
 		return fmt.Errorf("asset_repo: failed to access repo %s at %s directory file: %w", r.Id, r.Path, err)
 	} else if !info.IsDir() {
 		return fmt.Errorf("asset_repo: root_dir %s is not a directory", r.Path)

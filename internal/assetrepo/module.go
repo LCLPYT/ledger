@@ -32,9 +32,9 @@ type module struct {
 }
 
 type Config struct {
-	Addr        string        `config:"addr" validate:"required"`
-	ConfigFile  string        `config:"config_file"`
-	GracePeriod time.Duration `config:"grace_period" validate:"required"`
+	Addr        string               `config:"addr" validate:"required"`
+	RepoConfigs map[string]AssetRepo `config:"repos" validate:"dive"`
+	GracePeriod time.Duration        `config:"grace_period" validate:"required"`
 }
 
 func (m *module) Name() string {
@@ -44,7 +44,6 @@ func (m *module) Name() string {
 func loadConfig(i do.Injector) (Config, error) {
 	cfg, err := config.Load(i, "asset_repo", configKey, Config{
 		Addr:        ":8080",
-		ConfigFile:  "",
 		GracePeriod: 5 * time.Second,
 	})
 
@@ -70,19 +69,17 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 		return err
 	}
 
-	if m.cfg.ConfigFile == "" {
-		m.enabled = false
-		log.Info("asset_repo: no config was given, disabling feature")
-		return nil
-	}
-
-	cfg, err := ReadConfig(m.cfg.ConfigFile)
+	repos, err := m.cfg.Repos()
 
 	if err != nil {
 		return err
 	}
 
-	log.Debug("asset repo config read successfully", slog.Int("repositories", len(cfg.Repos)))
+	if len(repos) == 0 {
+		m.enabled = false
+		log.Info("asset_repo: no repos are configured, disabling feature")
+		return nil
+	}
 
 	authenticator, err := do.Invoke[*auth.Authenticator](i)
 
@@ -94,7 +91,7 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 
 	rootRoute := "/v1/assets"
 
-	for _, repo := range cfg.Repos {
+	for _, repo := range repos {
 		fsys, err := repo.FileSystem()
 
 		if err != nil {
@@ -240,11 +237,11 @@ func (r *statusRecorder) Unwrap() http.ResponseWriter {
 func Permissions(i do.Injector) ([]string, error) {
 	cfg, err := loadConfig(i)
 
-	if err != nil || cfg.ConfigFile == "" {
+	if err != nil {
 		return nil, err
 	}
 
-	repos, err := ReadConfig(cfg.ConfigFile)
+	repos, err := cfg.Repos()
 
 	if err != nil {
 		return nil, err
@@ -252,7 +249,7 @@ func Permissions(i do.Injector) ([]string, error) {
 
 	var permissions []string
 
-	for _, repo := range repos.Repos {
+	for _, repo := range repos {
 		if !repo.Public {
 			permissions = append(permissions, repo.ReadPermission())
 		}

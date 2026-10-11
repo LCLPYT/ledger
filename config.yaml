@@ -7,3 +7,11 @@ modules:
 
   postgres:
     url: postgres://db:db@127.0.0.1:5432/db?sslmode=disable
+
+  asset_repo:
+    repos:
+      public:
+        path: data/maps/public
+        public: true
+      private:
+        path: data/maps/private
