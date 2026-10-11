@@ -17,6 +17,12 @@ migrate: db
 bobgen: migrate
     PSQL_DSN="{{DB_DSN}}" go run github.com/stephenafamo/bob/gen/bobgen-psql@$(go list -m -f '{{{{.Version}}' github.com/stephenafamo/bob) -c bobgen.yaml
 
+    # bob doesn't support custom destination dir for generated queries through config right now...
+    # https://github.com/stephenafamo/bob/issues/566
+    rm -rf gen/go/bob/queries
+    mkdir -p gen/go/bob/queries
+    mv internal/db/queries/*.bob.go internal/db/queries/*.bob.sql gen/go/bob/queries/
+
 buf-update:
 	cd proto && buf dep update
 

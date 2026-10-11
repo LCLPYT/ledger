@@ -5,6 +5,8 @@ psql:
   schemas: ["public"]
   except:
     goose_db_version:
+  queries:
+    - internal/db/queries
 
 plugins:
   models:

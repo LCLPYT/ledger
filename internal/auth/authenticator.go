@@ -13,9 +13,8 @@ import (
 	"github.com/aarondl/opt/omitnull"
 	"github.com/gofrs/uuid/v5"
 	"github.com/lclpyt/ledger/gen/go/bob/model"
+	"github.com/lclpyt/ledger/gen/go/bob/queries"
 	"github.com/stephenafamo/bob"
-	"github.com/stephenafamo/bob/dialect/psql"
-	"github.com/stephenafamo/scan"
 )
 
 var ErrInvalidToken = errors.New("auth: invalid token")
@@ -137,12 +136,7 @@ func (a *Authenticator) cached(id uuid.UUID, hash []byte, now time.Time) (*Princ
 }
 
 func (a *Authenticator) permissions(ctx context.Context, id uuid.UUID) ([]string, error) {
-	// TODO improve this with generated query
-	permissions, err := bob.All(ctx, a.db, psql.RawQuery(`
-		SELECT DISTINCT rp.permission
-		FROM api_key_roles kr
-		JOIN role_permissions rp ON rp.role_name = kr.role_name
-		WHERE kr.api_key_id = ?`, id), scan.SingleColumnMapper[string])
+	permissions, err := queries.ApiKeyPermissions(id).All(ctx, a.db)
 
 	if err != nil {
 		return nil, fmt.Errorf("auth: failed to load the permissions of api key %s: %w", id, err)
