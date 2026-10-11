@@ -100,6 +100,9 @@ func listGamesWith(ctx context.Context, conn *grpc.ClientConn) error {
 var _ = Describe("Authentication", func() {
 	Describe("gRPC", func() {
 		It("covers every method the services declare", func() {
+			permissions, err := apiv1.MethodPermissions()
+			Expect(err).ToNot(HaveOccurred())
+
 			for _, desc := range []grpc.ServiceDesc{
 				ledgerv1.GamesService_ServiceDesc,
 				ledgerv1.PlayerSettingsService_ServiceDesc,
@@ -107,7 +110,7 @@ var _ = Describe("Authentication", func() {
 				Expect(desc.Streams).To(BeEmpty(), "streams bypass the unary auth interceptor")
 
 				for _, method := range desc.Methods {
-					Expect(apiv1.MethodPermissions).To(
+					Expect(permissions).To(
 						HaveKey(fmt.Sprintf("/%s/%s", desc.ServiceName, method.MethodName)))
 				}
 			}
@@ -179,7 +182,7 @@ var _ = Describe("Authentication", func() {
 
 			Expect(status.Code(err)).To(Equal(codes.PermissionDenied))
 			Expect(err).To(HaveReason("MISSING_PERMISSION"))
-			Expect(err).To(HaveErrorMetadata("permission", apiv1.PermissionGamesWrite))
+			Expect(err).To(HaveErrorMetadata("permission", "games.write"))
 		})
 
 		It("checks permissions before validating the request", func(ctx SpecContext) {

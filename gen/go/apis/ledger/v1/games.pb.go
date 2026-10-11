@@ -8,6 +8,7 @@ package ledgerv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/lclpyt/ledger/gen/go/apis/auth/v1"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -310,9 +311,8 @@ type UpdateGameRequest struct {
 	Game *Game `protobuf:"bytes,1,opt,name=game,proto3" json:"game,omitempty"`
 	// Fields to update. Omit to update all writable fields.
 	UpdateMask *fieldmaskpb.FieldMask `protobuf:"bytes,2,opt,name=update_mask,json=updateMask,proto3" json:"update_mask,omitempty"`
-	// If true and the game does not exist, it is created under the id of
-	// `game.name`, as with CreateGame. In this case `update_mask` is ignored.
-	// A soft deleted game is not recreated and must be restored with UndeleteGame.
+	// If true and the game does not exist, it is created (ignores the update mask).
+	// A soft deleted game will not be recreated and must be restored with UndeleteGame.
 	AllowMissing  bool `protobuf:"varint,3,opt,name=allow_missing,json=allowMissing,proto3" json:"allow_missing,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -571,7 +571,7 @@ var File_apis_ledger_v1_games_proto protoreflect.FileDescriptor
 
 const file_apis_ledger_v1_games_proto_rawDesc = "" +
 	"\n" +
-	"\x1aapis/ledger/v1/games.proto\x12\x0eapis.ledger.v1\x1a\x1aapis/ledger/v1/rules.proto\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x17google/api/client.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a google/protobuf/field_mask.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"F\n" +
+	"\x1aapis/ledger/v1/games.proto\x12\x0eapis.ledger.v1\x1a\x17apis/auth/v1/auth.proto\x1a\x1aapis/ledger/v1/rules.proto\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x17google/api/client.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a google/protobuf/field_mask.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"F\n" +
 	"\x0eGetGameRequest\x124\n" +
 	"\x04name\x18\x01 \x01(\tB \xe0A\x02\xfaA\x1a\n" +
 	"\x18ledger.lclpnet.work/GameR\x04name\"\x8f\x01\n" +
@@ -620,17 +620,25 @@ const file_apis_ledger_v1_games_proto_rawDesc = "" +
 	"\x10TYPE_UNSPECIFIED\x10\x00\x12\r\n" +
 	"\tTYPE_GAME\x10\x01\x12\x11\n" +
 	"\rTYPE_MINIGAME\x10\x02:8\xeaA5\n" +
-	"\x18ledger.lclpnet.work/Game\x12\fgames/{game}*\x05games2\x04game2\xa4\x05\n" +
-	"\fGamesService\x12b\n" +
-	"\aGetGame\x12\x1e.apis.ledger.v1.GetGameRequest\x1a\x14.apis.ledger.v1.Game\"!\xdaA\x04name\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/{name=games/*}\x12c\n" +
-	"\tListGames\x12 .apis.ledger.v1.ListGamesRequest\x1a!.apis.ledger.v1.ListGamesResponse\"\x11\x82\xd3\xe4\x93\x02\v\x12\t/v1/games\x12m\n" +
+	"\x18ledger.lclpnet.work/Game\x12\fgames/{game}*\x05games2\x04game2\x8a\x06\n" +
+	"\fGamesService\x12r\n" +
+	"\aGetGame\x12\x1e.apis.ledger.v1.GetGameRequest\x1a\x14.apis.ledger.v1.Game\"1\xdaA\x04name\x82\xb5\x18\f\n" +
 	"\n" +
-	"CreateGame\x12!.apis.ledger.v1.CreateGameRequest\x1a\x14.apis.ledger.v1.Game\"&\xdaA\fgame,game_id\x82\xd3\xe4\x93\x02\x11:\x04game\"\t/v1/games\x12\x7f\n" +
+	"games.read\x82\xd3\xe4\x93\x02\x14\x12\x12/v1/{name=games/*}\x12s\n" +
+	"\tListGames\x12 .apis.ledger.v1.ListGamesRequest\x1a!.apis.ledger.v1.ListGamesResponse\"!\x82\xb5\x18\f\n" +
 	"\n" +
-	"UpdateGame\x12!.apis.ledger.v1.UpdateGameRequest\x1a\x14.apis.ledger.v1.Game\"8\xdaA\x10game,update_mask\x82\xd3\xe4\x93\x02\x1f:\x04game2\x17/v1/{game.name=games/*}\x12h\n" +
+	"games.read\x82\xd3\xe4\x93\x02\v\x12\t/v1/games\x12~\n" +
 	"\n" +
-	"DeleteGame\x12!.apis.ledger.v1.DeleteGameRequest\x1a\x14.apis.ledger.v1.Game\"!\xdaA\x04name\x82\xd3\xe4\x93\x02\x14*\x12/v1/{name=games/*}\x12q\n" +
-	"\fUndeleteGame\x12#.apis.ledger.v1.UndeleteGameRequest\x1a\x14.apis.ledger.v1.Game\"&\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/{name=games/*}:undeleteB9Z7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\x06proto3"
+	"CreateGame\x12!.apis.ledger.v1.CreateGameRequest\x1a\x14.apis.ledger.v1.Game\"7\xdaA\fgame,game_id\x82\xb5\x18\r\n" +
+	"\vgames.write\x82\xd3\xe4\x93\x02\x11:\x04game\"\t/v1/games\x12\x90\x01\n" +
+	"\n" +
+	"UpdateGame\x12!.apis.ledger.v1.UpdateGameRequest\x1a\x14.apis.ledger.v1.Game\"I\xdaA\x10game,update_mask\x82\xb5\x18\r\n" +
+	"\vgames.write\x82\xd3\xe4\x93\x02\x1f:\x04game2\x17/v1/{game.name=games/*}\x12y\n" +
+	"\n" +
+	"DeleteGame\x12!.apis.ledger.v1.DeleteGameRequest\x1a\x14.apis.ledger.v1.Game\"2\xdaA\x04name\x82\xb5\x18\r\n" +
+	"\vgames.write\x82\xd3\xe4\x93\x02\x14*\x12/v1/{name=games/*}\x12\x82\x01\n" +
+	"\fUndeleteGame\x12#.apis.ledger.v1.UndeleteGameRequest\x1a\x14.apis.ledger.v1.Game\"7\x82\xb5\x18\r\n" +
+	"\vgames.write\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/{name=games/*}:undeleteB9Z7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\x06proto3"
 
 var (
 	file_apis_ledger_v1_games_proto_rawDescOnce sync.Once

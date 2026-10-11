@@ -40,7 +40,6 @@ type GamesServiceClient interface {
 	// Create a new game from a unique game id.
 	CreateGame(ctx context.Context, in *CreateGameRequest, opts ...grpc.CallOption) (*Game, error)
 	// Update game info of a game identified by the given id.
-	// With allow_missing, a game that does not exist is created instead.
 	UpdateGame(ctx context.Context, in *UpdateGameRequest, opts ...grpc.CallOption) (*Game, error)
 	// Soft delete a game. The game can be restored with UndeleteGame.
 	DeleteGame(ctx context.Context, in *DeleteGameRequest, opts ...grpc.CallOption) (*Game, error)
@@ -129,7 +128,6 @@ type GamesServiceServer interface {
 	// Create a new game from a unique game id.
 	CreateGame(context.Context, *CreateGameRequest) (*Game, error)
 	// Update game info of a game identified by the given id.
-	// With allow_missing, a game that does not exist is created instead.
 	UpdateGame(context.Context, *UpdateGameRequest) (*Game, error)
 	// Soft delete a game. The game can be restored with UndeleteGame.
 	DeleteGame(context.Context, *DeleteGameRequest) (*Game, error)

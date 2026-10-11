@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package apis.ledger.v1;
 
+import "apis/auth/v1/auth.proto";
 import "apis/ledger/v1/rules.proto";
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
@@ -26,12 +27,14 @@ option (google.api.resource_definition) = {
 service PlayerSettingsService {
   // Get a single setting of a player.
   rpc GetPlayerSetting(GetPlayerSettingRequest) returns (PlayerSetting) {
+    option (apis.auth.v1.requirement) = {permission: "player_settings.read"};
     option (google.api.http) = {get: "/v1/{name=players/*/settings/*}"};
     option (google.api.method_signature) = "name";
   }
 
   // List settings of a player, optionally restricted to a subtree.
   rpc ListPlayerSettings(ListPlayerSettingsRequest) returns (ListPlayerSettingsResponse) {
+    option (apis.auth.v1.requirement) = {permission: "player_settings.read"};
     option (google.api.http) = {get: "/v1/{parent=players/*}/settings"};
     option (google.api.method_signature) = "parent";
   }
@@ -40,6 +43,7 @@ service PlayerSettingsService {
   // (-- api-linter: core::0134::method-signature=disabled
   //     aip.dev/not-precedent: the request has no update_mask. --)
   rpc UpdatePlayerSetting(UpdatePlayerSettingRequest) returns (PlayerSetting) {
+    option (apis.auth.v1.requirement) = {permission: "player_settings.write"};
     option (google.api.http) = {
       patch: "/v1/{player_setting.name=players/*/settings/*}"
       body: "player_setting"
@@ -49,6 +53,7 @@ service PlayerSettingsService {
 
   // Reset a setting to the default value by deleting the player setting entry that serves as overwrite to the default.
   rpc DeletePlayerSetting(DeletePlayerSettingRequest) returns (google.protobuf.Empty) {
+    option (apis.auth.v1.requirement) = {permission: "player_settings.write"};
     option (google.api.http) = {delete: "/v1/{name=players/*/settings/*}"};
     option (google.api.method_signature) = "name";
   }

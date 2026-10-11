@@ -2,6 +2,7 @@ syntax = "proto3";
 
 package apis.ledger.v1;
 
+import "apis/auth/v1/auth.proto";
 import "apis/ledger/v1/rules.proto";
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
@@ -17,17 +18,20 @@ option go_package = "github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1";
 service GamesService {
   // Get game info.
   rpc GetGame(GetGameRequest) returns (Game) {
+    option (apis.auth.v1.requirement) = {permission: "games.read"};
     option (google.api.http) = {get: "/v1/{name=games/*}"};
     option (google.api.method_signature) = "name";
   }
 
   // List registered games.
   rpc ListGames(ListGamesRequest) returns (ListGamesResponse) {
+    option (apis.auth.v1.requirement) = {permission: "games.read"};
     option (google.api.http) = {get: "/v1/games"};
   }
 
   // Create a new game from a unique game id.
   rpc CreateGame(CreateGameRequest) returns (Game) {
+    option (apis.auth.v1.requirement) = {permission: "games.write"};
     option (google.api.http) = {
       post: "/v1/games"
       body: "game"
@@ -37,6 +41,7 @@ service GamesService {
 
   // Update game info of a game identified by the given id.
   rpc UpdateGame(UpdateGameRequest) returns (Game) {
+    option (apis.auth.v1.requirement) = {permission: "games.write"};
     option (google.api.http) = {
       patch: "/v1/{game.name=games/*}"
       body: "game"
@@ -46,12 +51,14 @@ service GamesService {
 
   // Soft delete a game. The game can be restored with UndeleteGame.
   rpc DeleteGame(DeleteGameRequest) returns (Game) {
+    option (apis.auth.v1.requirement) = {permission: "games.write"};
     option (google.api.http) = {delete: "/v1/{name=games/*}"};
     option (google.api.method_signature) = "name";
   }
 
   // Restore a soft deleted game.
   rpc UndeleteGame(UndeleteGameRequest) returns (Game) {
+    option (apis.auth.v1.requirement) = {permission: "games.write"};
     option (google.api.http) = {
       post: "/v1/{name=games/*}:undelete"
       body: "*"

@@ -6,6 +6,7 @@ import (
 
 	"buf.build/go/protovalidate"
 	ledgerv1 "github.com/lclpyt/ledger/gen/go/apis/ledger/v1"
+	"github.com/lclpyt/ledger/internal/auth"
 	"github.com/lclpyt/ledger/internal/games"
 	"github.com/lclpyt/ledger/internal/playersettings"
 	"github.com/stephenafamo/bob"
@@ -53,4 +54,9 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 	ledgerv1.RegisterPlayerSettingsServiceServer(server, newPlayerSettingsApi(playerSettingsService))
 
 	return nil
+}
+
+// MethodPermissions reads the permissions every ledger service declares on its methods.
+func MethodPermissions() (auth.MethodPermissions, error) {
+	return auth.PackagePermissions(ledgerv1.File_apis_ledger_v1_games_proto.Package())
 }

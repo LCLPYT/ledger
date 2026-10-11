@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package apis.auth.v1;
+
+import "google/protobuf/descriptor.proto";
+
+option go_package = "github.com/lclpyt/ledger/gen/go/apis/auth/v1;authv1";
+
+// Requirement declares what a caller needs to invoke a method.
+// Every method must declare one, methods without it are rejected.
+message Requirement {
+  oneof requirement {
+    // Permission the caller must hold, e.g. "games.read".
+    string permission = 1;
+    // Allows every caller without credentials. Must be true when set.
+    bool public = 2;
+  }
+}
+
+extend google.protobuf.MethodOptions {
+  Requirement requirement = 50000;
+}

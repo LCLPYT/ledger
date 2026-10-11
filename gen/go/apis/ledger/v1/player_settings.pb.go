@@ -8,6 +8,7 @@ package ledgerv1
 
 import (
 	_ "buf.build/gen/go/bufbuild/protovalidate/protocolbuffers/go/buf/validate"
+	_ "github.com/lclpyt/ledger/gen/go/apis/auth/v1"
 	_ "google.golang.org/genproto/googleapis/api/annotations"
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
@@ -384,7 +385,7 @@ var File_apis_ledger_v1_player_settings_proto protoreflect.FileDescriptor
 
 const file_apis_ledger_v1_player_settings_proto_rawDesc = "" +
 	"\n" +
-	"$apis/ledger/v1/player_settings.proto\x12\x0eapis.ledger.v1\x1a\x1aapis/ledger/v1/rules.proto\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x17google/api/client.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"c\n" +
+	"$apis/ledger/v1/player_settings.proto\x12\x0eapis.ledger.v1\x1a\x17apis/auth/v1/auth.proto\x1a\x1aapis/ledger/v1/rules.proto\x1a\x1bbuf/validate/validate.proto\x1a\x1cgoogle/api/annotations.proto\x1a\x17google/api/client.proto\x1a\x1fgoogle/api/field_behavior.proto\x1a\x19google/api/resource.proto\x1a\x1bgoogle/protobuf/empty.proto\x1a\x1cgoogle/protobuf/struct.proto\x1a\x1fgoogle/protobuf/timestamp.proto\"c\n" +
 	"\x17GetPlayerSettingRequest\x12H\n" +
 	"\x04name\x18\x01 \x01(\tB4\xe0A\x02\xfaA#\n" +
 	"!ledger.lclpnet.work/PlayerSetting\xbaH\br\x06\xd0>\x01\x18\x80\x04R\x04name\"\xa2\x02\n" +
@@ -411,12 +412,16 @@ const file_apis_ledger_v1_player_settings_proto_rawDesc = "" +
 	"createTime\x12@\n" +
 	"\vupdate_time\x18e \x01(\v2\x1a.google.protobuf.TimestampB\x03\xe0A\x03R\n" +
 	"updateTime:j\xeaAg\n" +
-	"!ledger.lclpnet.work/PlayerSetting\x12#players/{player}/settings/{setting}*\x0eplayerSettings2\rplayerSetting2\x8c\x05\n" +
-	"\x15PlayerSettingsService\x12\x8a\x01\n" +
-	"\x10GetPlayerSetting\x12'.apis.ledger.v1.GetPlayerSettingRequest\x1a\x1d.apis.ledger.v1.PlayerSetting\".\xdaA\x04name\x82\xd3\xe4\x93\x02!\x12\x1f/v1/{name=players/*/settings/*}\x12\x9d\x01\n" +
-	"\x12ListPlayerSettings\x12).apis.ledger.v1.ListPlayerSettingsRequest\x1a*.apis.ledger.v1.ListPlayerSettingsResponse\"0\xdaA\x06parent\x82\xd3\xe4\x93\x02!\x12\x1f/v1/{parent=players/*}/settings\x12\xb9\x01\n" +
-	"\x13UpdatePlayerSetting\x12*.apis.ledger.v1.UpdatePlayerSettingRequest\x1a\x1d.apis.ledger.v1.PlayerSetting\"W\xdaA\x0eplayer_setting\x82\xd3\xe4\x93\x02@:\x0eplayer_setting2./v1/{player_setting.name=players/*/settings/*}\x12\x89\x01\n" +
-	"\x13DeletePlayerSetting\x12*.apis.ledger.v1.DeletePlayerSettingRequest\x1a\x16.google.protobuf.Empty\".\xdaA\x04name\x82\xd3\xe4\x93\x02!*\x1f/v1/{name=players/*/settings/*}B{\xeaA?\n" +
+	"!ledger.lclpnet.work/PlayerSetting\x12#players/{player}/settings/{setting}*\x0eplayerSettings2\rplayerSetting2\xf6\x05\n" +
+	"\x15PlayerSettingsService\x12\xa4\x01\n" +
+	"\x10GetPlayerSetting\x12'.apis.ledger.v1.GetPlayerSettingRequest\x1a\x1d.apis.ledger.v1.PlayerSetting\"H\xdaA\x04name\x82\xb5\x18\x16\n" +
+	"\x14player_settings.read\x82\xd3\xe4\x93\x02!\x12\x1f/v1/{name=players/*/settings/*}\x12\xb7\x01\n" +
+	"\x12ListPlayerSettings\x12).apis.ledger.v1.ListPlayerSettingsRequest\x1a*.apis.ledger.v1.ListPlayerSettingsResponse\"J\xdaA\x06parent\x82\xb5\x18\x16\n" +
+	"\x14player_settings.read\x82\xd3\xe4\x93\x02!\x12\x1f/v1/{parent=players/*}/settings\x12\xd4\x01\n" +
+	"\x13UpdatePlayerSetting\x12*.apis.ledger.v1.UpdatePlayerSettingRequest\x1a\x1d.apis.ledger.v1.PlayerSetting\"r\xdaA\x0eplayer_setting\x82\xb5\x18\x17\n" +
+	"\x15player_settings.write\x82\xd3\xe4\x93\x02@:\x0eplayer_setting2./v1/{player_setting.name=players/*/settings/*}\x12\xa4\x01\n" +
+	"\x13DeletePlayerSetting\x12*.apis.ledger.v1.DeletePlayerSettingRequest\x1a\x16.google.protobuf.Empty\"I\xdaA\x04name\x82\xb5\x18\x17\n" +
+	"\x15player_settings.write\x82\xd3\xe4\x93\x02!*\x1f/v1/{name=players/*/settings/*}B{\xeaA?\n" +
 	"\x1aledger.lclpnet.work/Player\x12\x10players/{player}*\aplayers2\x06playerZ7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\x06proto3"
 
 var (

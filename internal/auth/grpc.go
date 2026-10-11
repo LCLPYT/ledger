@@ -39,8 +39,15 @@ var (
 // It is intended to be turned off in prod.
 
 // Unary returns an interceptor that authenticates a call and checks the permission its method requires.
-func Unary(permissions MethodPermissions) grpcserver.UnaryInterceptor {
+// The permissions are loaded once while the interceptor is created, failing it on an invalid definition.
+func Unary(loadPermissions func() (MethodPermissions, error)) grpcserver.UnaryInterceptor {
 	return func(i do.Injector) (grpc.UnaryServerInterceptor, error) {
+		permissions, err := loadPermissions()
+
+		if err != nil {
+			return nil, fmt.Errorf("auth: failed to load method permissions: %w", err)
+		}
+
 		log, err := logging.Component(i, "auth")
 
 		if err != nil {
