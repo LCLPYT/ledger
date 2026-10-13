@@ -1,0 +1,17 @@
+.git
+.idea
+.direnv
+data
+proto
+.envrc
+.dockerignore
+.gitignore
+bobgen.yaml
+buf.gen.go.yaml
+config.yaml
+docker-compose.yml
+Dockerfile
+flake.lock
+flake.nix
+justfile
+/ledger
