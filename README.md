@@ -88,3 +88,7 @@ Repo ids have to match `^[a-z0-9_-]+$` and become part of the URL `/v1/assets/<i
 A repo directory is created on startup if it does not exist. 
 Files and directories starting with `.` are never served.
 Since they are map keys, repos can be added or overridden via environment variables, e.g. `LEDGER__MODULES__ASSET_REPO__REPOS__PRIVATE__PATH`.
+
+### Health check
+
+`ledger healthcheck` can be used for container health checks.

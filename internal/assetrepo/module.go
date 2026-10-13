@@ -19,6 +19,8 @@ import (
 
 const configKey = "modules.asset_repo"
 
+const HealthPath = "/health"
+
 func Module() app.Module {
 	return &module{}
 }
@@ -112,7 +114,13 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 			slog.Bool("public", repo.Public))
 	}
 
-	handler := m.withLogging(mux)
+	handler := http.NewServeMux()
+
+	handler.HandleFunc("GET "+HealthPath, func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	})
+
+	handler.Handle("/", m.withLogging(mux))
 
 	budget, err := do.Invoke[app.DrainBudget](i)
 
@@ -256,4 +264,25 @@ func Permissions(i do.Injector) ([]string, error) {
 	}
 
 	return permissions, nil
+}
+
+// Addr returns the configured listen address if asset repos are configured
+func Addr(i do.Injector) (string, error) {
+	cfg, err := loadConfig(i)
+
+	if err != nil {
+		return "", err
+	}
+
+	repos, err := cfg.Repos()
+
+	if err != nil {
+		return "", err
+	}
+
+	if len(repos) == 0 {
+		return "", nil
+	}
+
+	return cfg.Addr, nil
 }
