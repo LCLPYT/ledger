@@ -34,9 +34,10 @@ type module struct {
 }
 
 type Config struct {
-	Addr        string               `config:"addr" validate:"required"`
-	RepoConfigs map[string]AssetRepo `config:"repos" validate:"dive"`
-	GracePeriod time.Duration        `config:"grace_period" validate:"required"`
+	Addr            string               `config:"addr" validate:"required"`
+	RepoConfigs     map[string]AssetRepo `config:"repos" validate:"dive"`
+	GracePeriod     time.Duration        `config:"grace_period" validate:"required"`
+	DownloadTimeout time.Duration        `config:"download_timeout" validate:"required"`
 }
 
 func (m *module) Name() string {
@@ -45,8 +46,9 @@ func (m *module) Name() string {
 
 func loadConfig(i do.Injector) (Config, error) {
 	cfg, err := config.Load(i, "asset_repo", configKey, Config{
-		Addr:        ":8080",
-		GracePeriod: 5 * time.Second,
+		Addr:            ":8080",
+		GracePeriod:     5 * time.Second,
+		DownloadTimeout: 10 * time.Minute,
 	})
 
 	if err != nil {
@@ -102,7 +104,7 @@ func (m *module) Provide(_ context.Context, i do.Injector) error {
 
 		prefix := fmt.Sprintf("%s/%s/", rootRoute, repo.Id)
 
-		files := http.StripPrefix(prefix, http.FileServer(fsys))
+		var files http.Handler = m.withDownloadTimeout(http.StripPrefix(prefix, http.FileServer(fsys)))
 
 		if !repo.Public {
 			files = auth.RequireHTTP(authenticator, log, repo.ReadPermission(), files)
@@ -204,6 +206,19 @@ func (m *module) stop() {
 	}
 
 	m.log.Info("stopped")
+}
+
+// withDownloadTimeout replaces the short server write timeout, so slow clients can finish large downloads.
+func (m *module) withDownloadTimeout(next http.Handler) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		err := http.NewResponseController(w).SetWriteDeadline(time.Now().Add(m.cfg.DownloadTimeout))
+
+		if err != nil {
+			m.log.Warn("failed to extend the write deadline", slog.Any("error", err))
+		}
+
+		next.ServeHTTP(w, r)
+	}
 }
 
 func (m *module) withLogging(next http.Handler) http.HandlerFunc {

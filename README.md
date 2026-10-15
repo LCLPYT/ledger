@@ -82,6 +82,7 @@ Single underscores stay part of the key name.
 | `modules.asset_repo.repos.<id>.path`   | required | Directory served by the repo `<id>`, absolute or relative to the working directory |
 | `modules.asset_repo.repos.<id>.public` | `false`  | Serves the repo without auth, otherwise `assets.read:<id>` is required             |
 | `modules.asset_repo.grace_period`      | `5s`     | Time in-flight requests get to finish on shutdown                                  |
+| `modules.asset_repo.download_timeout`  | `10m`    | Maximum time to send a file, slower downloads are aborted                          |
 
 The asset repository is disabled when no repos are configured.
 Repo ids have to match `^[a-z0-9_-]+$` and become part of the URL `/v1/assets/<id>/`.
