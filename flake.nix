@@ -1,10 +1,10 @@
 {
-  inputs.nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixos-unstable";
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
     {
       self,
-      nixpkgs-unstable,
+      nixpkgs,
     }:
     let
       supportedSystems = [
@@ -14,10 +14,10 @@
       ];
       forEachSupportedSystem =
         f:
-        nixpkgs-unstable.lib.genAttrs supportedSystems (
+        nixpkgs.lib.genAttrs supportedSystems (
           system:
           f {
-            pkgs-unstable = import nixpkgs-unstable { inherit system; };
+            pkgs = import nixpkgs { inherit system; };
             inherit system;
           }
         );
@@ -26,20 +26,29 @@
       devShells = forEachSupportedSystem (
         {
           system,
-          pkgs-unstable,
+          pkgs,
         }:
         {
-          default = pkgs-unstable.mkShell {
-            packages = with pkgs-unstable; [
+          default = pkgs.mkShell {
+            packages = with pkgs; [
               # API tooling
               protoc-gen-go
               protoc-gen-go-grpc
               api-linter
               grpcui
               grpcurl
+
+              jdk25
             ];
 
             hardeningDisable = [ "fortify" ];
+
+            JAVA_HOME = "${pkgs.jdk25.home}";
+
+            # consistent location for SDK selection in IDEs
+            shellHook = ''
+              ln -sfn ${pkgs.jdk25.home} .jdk
+            '';
           };
         }
       );
