@@ -136,7 +136,8 @@ const file_apis_auth_v1_auth_proto_rawDesc = "" +
 	"permission\x12\x18\n" +
 	"\x06public\x18\x02 \x01(\bH\x00R\x06publicB\r\n" +
 	"\vrequirement:]\n" +
-	"\vrequirement\x12\x1e.google.protobuf.MethodOptions\x18І\x03 \x01(\v2\x19.apis.auth.v1.RequirementR\vrequirementB5Z3github.com/lclpyt/ledger/gen/go/apis/auth/v1;authv1b\x06proto3"
+	"\vrequirement\x12\x1e.google.protobuf.MethodOptions\x18І\x03 \x01(\v2\x19.apis.auth.v1.RequirementR\vrequirementBT\n" +
+	"\x1bwork.lclpnet.ledger.auth.v1P\x01Z3github.com/lclpyt/ledger/gen/go/apis/auth/v1;authv1b\x06proto3"
 
 var (
 	file_apis_auth_v1_auth_proto_rawDescOnce sync.Once

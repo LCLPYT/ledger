@@ -1,16 +1,18 @@
-edition = "2023";
+syntax = "proto2";
 
 package apis.ledger.v1;
 
 import "buf/validate/validate.proto";
 
 option go_package = "github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1";
+option java_multiple_files = true;
+option java_package = "work.lclpnet.ledger.v1";
 
 // Shared validation rules.
 extend buf.validate.StringRules {
   // Takes a pattern where `*` is one id segment:
   // `tracks/*`, `tracks/*/points/*`.
-  string resource_name = 1000 [(buf.validate.predefined).cel = {
+  optional string resource_name = 1000 [(buf.validate.predefined).cel = {
     id: "string.resource_name"
     expression:
       "this.matches('^' + rule.replace('*', '[a-z]([a-z0-9-]{0,61}[a-z0-9])?') + '$')"
@@ -19,7 +21,7 @@ extend buf.validate.StringRules {
   }];
 
   // Player resource name, `players/{player}` where {player} is a lowercase UUIDv4.
-  bool player_name = 1001 [(buf.validate.predefined).cel = {
+  optional bool player_name = 1001 [(buf.validate.predefined).cel = {
     id: "string.player_name"
     expression:
       "!rule || this.matches('^players/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$')"
@@ -29,7 +31,7 @@ extend buf.validate.StringRules {
 
   // Player setting resource name, `players/{player}/settings/{setting}` where {player} is
   // a lowercase UUIDv4 and {setting} a dot separated path of up to 16 segments.
-  bool player_setting_name = 1002 [(buf.validate.predefined).cel = {
+  optional bool player_setting_name = 1002 [(buf.validate.predefined).cel = {
     id: "string.player_setting_name"
     expression:
       "!rule || this.matches('^players/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/settings/[a-z][a-z0-9_]{0,62}([.][a-z][a-z0-9_]{0,62}){0,15}$')"

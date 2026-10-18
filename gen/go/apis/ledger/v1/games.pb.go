@@ -638,7 +638,8 @@ const file_apis_ledger_v1_games_proto_rawDesc = "" +
 	"DeleteGame\x12!.apis.ledger.v1.DeleteGameRequest\x1a\x14.apis.ledger.v1.Game\"2\xdaA\x04name\x82\xb5\x18\r\n" +
 	"\vgames.write\x82\xd3\xe4\x93\x02\x14*\x12/v1/{name=games/*}\x12\x82\x01\n" +
 	"\fUndeleteGame\x12#.apis.ledger.v1.UndeleteGameRequest\x1a\x14.apis.ledger.v1.Game\"7\x82\xb5\x18\r\n" +
-	"\vgames.write\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/{name=games/*}:undeleteB9Z7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\x06proto3"
+	"\vgames.write\x82\xd3\xe4\x93\x02 :\x01*\"\x1b/v1/{name=games/*}:undeleteBS\n" +
+	"\x16work.lclpnet.ledger.v1P\x01Z7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\x06proto3"
 
 var (
 	file_apis_ledger_v1_games_proto_rawDescOnce sync.Once

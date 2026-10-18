@@ -80,7 +80,8 @@ const file_apis_ledger_v1_rules_proto_rawDesc = "" +
 	"playerName:\xd4\x02\n" +
 	"\x13player_setting_name\x12\x19.buf.validate.StringRules\x18\xea\a \x01(\bB\x87\x02\xc2H\x83\x02\n" +
 	"\x80\x02\n" +
-	"\x1astring.player_setting_name\x1a\xe1\x01!rule || this.matches('^players/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/settings/[a-z][a-z0-9_]{0,62}([.][a-z][a-z0-9_]{0,62}){0,15}$')  ? ''  : 'must be a valid players/*/settings/* resource name'R\x11playerSettingNameB9Z7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\beditionsp\xe8\a"
+	"\x1astring.player_setting_name\x1a\xe1\x01!rule || this.matches('^players/[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}/settings/[a-z][a-z0-9_]{0,62}([.][a-z][a-z0-9_]{0,62}){0,15}$')  ? ''  : 'must be a valid players/*/settings/* resource name'R\x11playerSettingNameBS\n" +
+	"\x16work.lclpnet.ledger.v1P\x01Z7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1"
 
 var file_apis_ledger_v1_rules_proto_goTypes = []any{
 	(*validate.StringRules)(nil), // 0: buf.validate.StringRules

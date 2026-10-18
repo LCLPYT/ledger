@@ -421,8 +421,9 @@ const file_apis_ledger_v1_player_settings_proto_rawDesc = "" +
 	"\x13UpdatePlayerSetting\x12*.apis.ledger.v1.UpdatePlayerSettingRequest\x1a\x1d.apis.ledger.v1.PlayerSetting\"r\xdaA\x0eplayer_setting\x82\xb5\x18\x17\n" +
 	"\x15player_settings.write\x82\xd3\xe4\x93\x02@:\x0eplayer_setting2./v1/{player_setting.name=players/*/settings/*}\x12\xa4\x01\n" +
 	"\x13DeletePlayerSetting\x12*.apis.ledger.v1.DeletePlayerSettingRequest\x1a\x16.google.protobuf.Empty\"I\xdaA\x04name\x82\xb5\x18\x17\n" +
-	"\x15player_settings.write\x82\xd3\xe4\x93\x02!*\x1f/v1/{name=players/*/settings/*}B{\xeaA?\n" +
-	"\x1aledger.lclpnet.work/Player\x12\x10players/{player}*\aplayers2\x06playerZ7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\x06proto3"
+	"\x15player_settings.write\x82\xd3\xe4\x93\x02!*\x1f/v1/{name=players/*/settings/*}B\x95\x01\xeaA?\n" +
+	"\x1aledger.lclpnet.work/Player\x12\x10players/{player}*\aplayers2\x06player\n" +
+	"\x16work.lclpnet.ledger.v1P\x01Z7github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1b\x06proto3"
 
 var (
 	file_apis_ledger_v1_player_settings_proto_rawDescOnce sync.Once

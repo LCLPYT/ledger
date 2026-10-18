@@ -1,3 +1,15 @@
+pluginManagement {
+    repositories {
+        maven {
+            name = "LCLPNetwork Maven"
+            url = uri("https://repo.lclpnet.work/repository/internal")
+        }
+
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
 plugins {
     // Apply the foojay-resolver plugin to allow automatic download of JDKs
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"

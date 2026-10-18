@@ -14,6 +14,8 @@ import "google/protobuf/struct.proto";
 import "google/protobuf/timestamp.proto";
 
 option go_package = "github.com/lclpyt/ledger/gen/go/apis/ledger/v1;ledgerv1";
+option java_multiple_files = true;
+option java_package = "work.lclpnet.ledger.v1";
 option (google.api.resource_definition) = {
   type: "ledger.lclpnet.work/Player"
   pattern: "players/{player}"

@@ -5,6 +5,8 @@ package apis.auth.v1;
 import "google/protobuf/descriptor.proto";
 
 option go_package = "github.com/lclpyt/ledger/gen/go/apis/auth/v1;authv1";
+option java_multiple_files = true;
+option java_package = "work.lclpnet.ledger.auth.v1";
 
 // Requirement declares what a caller needs to invoke a method.
 // Every method must declare one, methods without it are rejected.
