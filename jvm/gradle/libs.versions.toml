@@ -1,6 +1,6 @@
 [versions]
 java = "25"
-jvm-target-java = "8"
+jvm-target-core = "8"
 jvm-target-kotlin = "17"
 kotlin = "2.4.21"
 junit-jupiter = "6.0.1"

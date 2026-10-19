@@ -6,3 +6,4 @@
 
 .direnv
 .jdk
+/.pre-commit-config.yaml

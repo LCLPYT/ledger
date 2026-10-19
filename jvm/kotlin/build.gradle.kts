@@ -11,14 +11,10 @@ plugins {
 val targetVersion: Int = libs.versions.jvm.target.kotlin.get().toInt()
 
 dependencies {
-    api(project(":java"))
+    api(project(":core"))
     api(libs.protobuf.kotlin)
     api(libs.grpc.kotlin.stub)
     api(libs.kotlinx.coroutines.core)
-
-    testImplementation(libs.kotlin.test)
-    testImplementation(libs.junit.jupiter.engine)
-    testRuntimeOnly(libs.junit.platform.launcher)
 }
 
 tasks.withType<JavaCompile>().configureEach {
@@ -55,11 +51,7 @@ protobuf {
     }
 }
 
-// proto files are already contained within the java artifact, which is a dependency of the kotlin artifact
+// proto files are already contained within the core artifact, which is a dependency of the kotlin artifact
 tasks.processResources {
     exclude("**/*.proto")
-}
-
-tasks.named<Test>("test") {
-    useJUnitPlatform()
 }

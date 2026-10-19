@@ -8,13 +8,15 @@ plugins {
 }
 
 subprojects {
+    version = file("version.txt").readText().trim()
+
     repositories {
         mavenCentral()
     }
 
     pluginManager.withPlugin(rootProject.libs.plugins.java.library.get().pluginId) {
         configure<BasePluginExtension> {
-            archivesName = "ledger-${project.name}"
+            archivesName = "ledger-jvm-${project.name}"
         }
 
         configure<JavaPluginExtension> {

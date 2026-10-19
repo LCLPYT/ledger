@@ -3,7 +3,10 @@ default:
 
 DB_DSN := "postgres://db:db@localhost:5432/db?sslmode=disable"
 
-check: test fmt-check lint
+# Committed next to each client package so release-please attributes proto changes to it.
+PROTO_HASH_FILES := "jvm/core/proto.sha256 jvm/kotlin/proto.sha256"
+
+check: test fmt-check lint proto-hash-check
 
 alias db-gen := bobgen
 
@@ -35,7 +38,7 @@ bobgen: migrate
 buf-update:
 	cd proto && buf dep update
 
-buf-gen:
+buf-gen: && proto-hash
     #!/usr/bin/env bash
     set -euo pipefail
     if [ -z "$(find proto/apis -name '*.proto' 2>/dev/null)" ]; then
@@ -43,6 +46,31 @@ buf-gen:
         exit 0
     fi
     buf generate --template buf.gen.go.yaml
+
+proto-hash:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    hash="$({{just_executable()}} _proto-hash)"
+    for f in {{PROTO_HASH_FILES}}; do
+        echo "$hash" > "$f"
+    done
+
+proto-hash-check:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    hash="$({{just_executable()}} _proto-hash)"
+    status=0
+    for f in {{PROTO_HASH_FILES}}; do
+        if [ "$(cat "$f" 2>/dev/null)" != "$hash" ]; then
+            echo "$f is out of date, run 'just proto-hash'" >&2
+            status=1
+        fi
+    done
+    exit $status
+
+[private]
+_proto-hash:
+    @find proto -type f -name '*.proto' -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1
 
 db:
     docker compose up -d --wait postgres

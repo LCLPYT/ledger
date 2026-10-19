@@ -15,7 +15,7 @@ plugins {
     id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
 }
 
-rootProject.name = "ledger-kotlin"
+rootProject.name = "ledger-jvm"
 
-include("java")
+include("core")
 include("kotlin")

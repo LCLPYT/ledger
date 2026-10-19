@@ -1,7 +1,7 @@
 # ledger
 A lightweight backend service for Minecraft game and player data, written in Go.
 
-## Hosting
+## Hosting the Go backend
 
 ### Configuration
 
@@ -93,3 +93,53 @@ Since they are map keys, repos can be added or overridden via environment variab
 ### Health check
 
 `ledger healthcheck` can be used for container health checks.
+
+## Using the clients
+
+Ledger uses [protobufs](https://protobuf.dev/) located in `proto/`.
+The repository provides the following first-party bindings:
+
+- JVM: For use with Java, Kotlin, Scala etc. (`jvm/core`; for use with JRE 8 or later)
+- Kotlin: Bindings for Kotlin Coroutines (`jvm/kotlin`; for use with JRE 17 or later)
+
+### Kotlin, Java, Scala and Groovy (JVM)
+
+JVM bindings for the protobuf client and server code are available via Maven.
+The JVM bindings are written in Kotlin but are usable with any JVM language, such as Java, Scala or Groovy.
+
+#### Using Gradle
+Add this to your `build.gradle.kts`:
+```kotlin
+repositories {
+    maven {
+        url = uri("https://repo.lclpnet.work/repository/internal")
+    }
+}
+
+dependencies {
+    implementation("work.lclpnet.ledger:ledger-jvm-core:0.1.0")
+    
+    // if you are using kotlin, add this as well
+    implementation("work.lclpnet.ledger:ledger-jvm-kotlin:0.1.0")
+}
+```
+
+>[!TIP]
+> For cleaner dependency management, use the [Gradle version catalog](https://docs.gradle.org/current/userguide/version_catalogs.html).
+> This makes it way easier to manage dependencies and versions in one central place, especially for multi-project Gradle projects.
+
+#### Updating protobufs
+Project releases are managed using Google's [release-please](https://github.com/googleapis/release-please).
+This project uses a monorepo-style-layout for all ledger-related things.
+
+The `release-please-config.json` partitions the codebase into separate packages.
+Changes to files within the specific package sources cause new releases to only the changed parts.
+That means that a change in `proto/` currently doesn't automatically cause a new release in the clients (at least until [PR #2534](https://github.com/googleapis/release-please/pull/2534) is merged into release-please).
+
+To bypass this, this project introduces a simple solution: each client pins a hash of the `proto/` directory in a file within its release-please file tree.
+This way, changing the protos needs an update to the hash files using:
+```bash
+just proto-hash
+```
+
+There is a [CI action](./.github/workflows/proto-hash.yml) that verifies that these proto hash files are kept up-to-date.
