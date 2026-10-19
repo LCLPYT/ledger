@@ -16,4 +16,6 @@ plugins {
 }
 
 rootProject.name = "ledger-kotlin"
-include("lib")
+
+include("java")
+include("kotlin")
