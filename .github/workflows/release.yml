@@ -5,21 +5,32 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   release-please:
     runs-on: ubuntu-latest
+    environment: release
     outputs:
       server_released: ${{ steps.release.outputs.release_created }}
       server_version: ${{ steps.release.outputs.version }}
       core_released: ${{ steps.release.outputs['jvm/core--release_created'] }}
       kotlin_released: ${{ steps.release.outputs['jvm/kotlin--release_created'] }}
     steps:
+      # an app token, unlike GITHUB_TOKEN, lets the release PR trigger the PR check workflows
+      - id: app-token
+        uses: actions/create-github-app-token@v3
+        with:
+          client-id: ${{ vars.RELEASE_APP_CLIENT_ID }}
+          private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
+          permission-contents: write
+          permission-pull-requests: write
+          permission-issues: write
+
       - id: release
         uses: googleapis/release-please-action@v5
         with:
+          token: ${{ steps.app-token.outputs.token }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
