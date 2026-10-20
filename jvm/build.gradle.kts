@@ -53,8 +53,8 @@ subprojects {
                             from(components["java"])
 
                             pom {
-                                name = "Ledger $displayName"
-                                description = "$displayName gRPC client library for the Ledger API."
+                                name = "Ledger JVM $displayName"
+                                description = "JVM $displayName gRPC client library for the Ledger API."
                             }
                         }
                     }
