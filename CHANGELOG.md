@@ -1,0 +1,56 @@
+# Changelog
+
+## 0.1.0 (2026-10-20)
+
+
+### Features
+
+* add admin tui for managing users, roles and access tokens ([775a218](https://github.com/LCLPYT/ledger/commit/775a2183952a6ff5d16002836dc4a60448b97079))
+* add auto migration generation ([522a8bd](https://github.com/LCLPYT/ledger/commit/522a8bdbdc11ad05d4ec2acff3dd34f8e1aad9e3))
+* add custom no route handler and add logging and recovery middlewares ([a06b17e](https://github.com/LCLPYT/ledger/commit/a06b17eca1492566b044451d67b3cb904adec5fa))
+* add grpc server setup ([aae1c3d](https://github.com/LCLPYT/ledger/commit/aae1c3d170fb293a4f001300a6cf3224df33f1d3))
+* add health check command for more flexible configs ([db43619](https://github.com/LCLPYT/ledger/commit/db43619e99be85864fa3fb9463194b7bc870e86e))
+* add kotlin and java proto gen ([ce6217f](https://github.com/LCLPYT/ledger/commit/ce6217ff885a2a1612c0631c3d5fc3fa1f61131c))
+* add make user command ([1c531ab](https://github.com/LCLPYT/ledger/commit/1c531abda3c9a352293fdeddd9514d7186fafd4c))
+* add multi asset repo via yaml config ([44fccd4](https://github.com/LCLPYT/ledger/commit/44fccd4f4de939299d551d10f7db6ae5080643dc))
+* add password hash to user table ([93cad5a](https://github.com/LCLPYT/ledger/commit/93cad5ad56831862f8b2f9f2303226f37d1cda9a))
+* add player settings api ([20e5987](https://github.com/LCLPYT/ledger/commit/20e5987b7199abeecb0e2899cd717fce0560d5c4))
+* add scoped permissions to access tokens ([fb96d5f](https://github.com/LCLPYT/ledger/commit/fb96d5f7a68a16323872f3b1099dfdf43573cd6a))
+* add tests for v1 games api ([3a480e3](https://github.com/LCLPYT/ledger/commit/3a480e33db136fea296ec10975cf1e12db3062a7))
+* add undelete game and unify game resource name character set ([72b8785](https://github.com/LCLPYT/ledger/commit/72b8785ecf2fe57714b103495bd02090a8d5e1fa))
+* begin golib integration with wiring.go ([d874add](https://github.com/LCLPYT/ledger/commit/d874addf624d3ff5445b29b32b24903dc4e39075))
+* drop sqlite and move to plain sql migrations ([509299c](https://github.com/LCLPYT/ledger/commit/509299cc4bbb3e360066684930dd5c43119944ce))
+* hide hidden files in map repo server ([b7e088e](https://github.com/LCLPYT/ledger/commit/b7e088ee4aa72d9b6f8eefac701aa6452022914f))
+* implement game update, delete and undelete ([1f2908e](https://github.com/LCLPYT/ledger/commit/1f2908e018ebbd07e3f8a986b4dff4dd52baa568))
+* implement get game ([7455673](https://github.com/LCLPYT/ledger/commit/7455673591bc4d8240558fe9bd8cbaa47ec56bed))
+* implement list and create game ([0ef054c](https://github.com/LCLPYT/ledger/commit/0ef054cda161201951752ad52643e4f9eaaf382b))
+* implement map repository ([d85ccb8](https://github.com/LCLPYT/ledger/commit/d85ccb8a564f536e0f0e988dfe066117a35debe3))
+* implement RBAC auth for gRPC and http ([116017f](https://github.com/LCLPYT/ledger/commit/116017fb7a9fd3cc030e7901f1eed22b875bd828))
+* increase write deadline for downloads of big files ([ec20c62](https://github.com/LCLPYT/ledger/commit/ec20c6291acf10690022b67eaa0c75a80f6ba49a))
+* integrate cobra ([e7be075](https://github.com/LCLPYT/ledger/commit/e7be07529401b5b1bcbb30d37e4fafbebaf10d90))
+* integrate golib with cobra ([462b75c](https://github.com/LCLPYT/ledger/commit/462b75cd1684fad1e1b3b9db0423ad9cb8842a1f))
+* make access tokens user owned ([1d90eef](https://github.com/LCLPYT/ledger/commit/1d90eef363e61091c50bd7bee62d0276db41f85d))
+* make asset repo module optional ([7f7a6df](https://github.com/LCLPYT/ledger/commit/7f7a6dfebb87d5fab85a1b3f407121fdacd1b094))
+* move asset repo config to module config ([4277ae7](https://github.com/LCLPYT/ledger/commit/4277ae74b8c9d0e513bee44bdd7b1eaab2a28a39))
+* move grpc method permission requirement to proto method option ([88fe22e](https://github.com/LCLPYT/ledger/commit/88fe22e9e026354ea0ed0456b6fc9cf80427881c))
+* protect user and admin role for rename and delete ([59d122a](https://github.com/LCLPYT/ledger/commit/59d122a3e6b5bc690ccd9b860cc6476ef76edc32))
+* reintroduce serve cmd ([7b6b953](https://github.com/LCLPYT/ledger/commit/7b6b953d21faae1ef0bd745359f3322a8248d867))
+* remove ledger debug env variable in favor of default GIN_MODE ([a337ffd](https://github.com/LCLPYT/ledger/commit/a337ffdd9691856dd18d39505dcfdff98714009f))
+* remove user email column and replace by unique username ([d2308db](https://github.com/LCLPYT/ledger/commit/d2308db30010cb232d709077b1029573aa812a7d))
+* rename go mod ([5519d4b](https://github.com/LCLPYT/ledger/commit/5519d4b60c58d5c97872441ce8e58342cb317201))
+* rename kotlin module to jvm (core and kotlin artifacts) add release-please workflows ([4ec1abf](https://github.com/LCLPYT/ledger/commit/4ec1abf83f50d7b12a7cb56cf8571d3921ecfc26))
+* setup bun db and migrations ([29093ac](https://github.com/LCLPYT/ledger/commit/29093acb5f0b41d09ae897d61c7432b198c0b63f))
+* setup games table and begin games protobuf ([b0f2474](https://github.com/LCLPYT/ledger/commit/b0f2474fd577a7e1345ee18590341a24b8c440e1))
+* setup gin and viper ([02c760d](https://github.com/LCLPYT/ledger/commit/02c760d35c4bc646fe833ff4f8e4cbc0f8a7b1cc))
+* setup kotlin gradle project ([111f6ae](https://github.com/LCLPYT/ledger/commit/111f6ae4e41571bd956db489ff9e9caafa947a9a))
+* split lib into java (java 8+) and kotlin (java 17+) variant ([7cd3170](https://github.com/LCLPYT/ledger/commit/7cd3170fd2ce37bfef298a98d2bcc33132e52e37))
+* support upsert in games api ([38b7c18](https://github.com/LCLPYT/ledger/commit/38b7c180ad67468c4226118c4aa67109db37dce4))
+
+
+### Bug Fixes
+
+* document protobuf services, rpc and messages ([06b2a7d](https://github.com/LCLPYT/ledger/commit/06b2a7da607e0c63a6fe8d60a6393b8cb9ff2efc))
+* drop game type in down migration ([13b531d](https://github.com/LCLPYT/ledger/commit/13b531da66d475306c85aee3c97365085287c86a))
+* explanatory text when owner has no permissions ([29d9128](https://github.com/LCLPYT/ledger/commit/29d912841459b975f0a1229cf71e9b45bb5e111b))
+* migration time consistency ([431f157](https://github.com/LCLPYT/ledger/commit/431f1576f03300e371381f80a90938ae93f00ba8))
+* proto lint and add update_time trigger on games table ([e43d79a](https://github.com/LCLPYT/ledger/commit/e43d79a55c2a78135f8ec53f42ad98b16570bf45))
