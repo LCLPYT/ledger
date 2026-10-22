@@ -57,6 +57,7 @@
               api-linter
               grpcui
               grpcurl
+              golangci-lint
 
               jdk25
             ]);

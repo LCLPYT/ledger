@@ -75,9 +75,9 @@ func methodPermission(method protoreflect.MethodDescriptor) (string, error) {
 		}
 
 		return r.Permission, nil
-	case *authv1.Requirement_Public:
-		if !r.Public {
-			return "", errors.New("public must be true when set")
+	case *authv1.Requirement_AllowUnauthenticated:
+		if !r.AllowUnauthenticated {
+			return "", errors.New("allow_unauthenticated must be true when set")
 		}
 
 		return Public, nil

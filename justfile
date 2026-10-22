@@ -6,7 +6,13 @@ DB_DSN := "postgres://db:db@localhost:5432/db?sslmode=disable"
 # Committed next to each client package so release-please attributes proto changes to it.
 PROTO_HASH_FILES := "jvm/core/proto.sha256 jvm/kotlin/proto.sha256"
 
-check: test fmt-check lint proto-hash-check
+check: test fmt-check lint proto-hash-check check-jvm
+
+gradlew *args:
+    cd jvm && ./gradlew {{ args }}
+
+check-jvm:
+    just gradlew check
 
 alias db-gen := bobgen
 
@@ -78,8 +84,14 @@ db:
 test-db:
     docker compose up -d --wait postgres_test
 
-test: test-db
+[parallel]
+test: test-go test-jvm
+
+test-go: test-db
     go test ./...
+
+test-jvm:
+    just gradlew test
 
 stop-db:
     docker compose down postgres

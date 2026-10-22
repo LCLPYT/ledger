@@ -15,7 +15,7 @@ message Requirement {
     // Permission the caller must hold, e.g. "games.read".
     string permission = 1;
     // Allows every caller without credentials. Must be true when set.
-    bool public = 2;
+    bool allow_unauthenticated = 2;
   }
 }
 

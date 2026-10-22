@@ -29,7 +29,7 @@ type Requirement struct {
 	// Types that are valid to be assigned to Requirement:
 	//
 	//	*Requirement_Permission
-	//	*Requirement_Public
+	//	*Requirement_AllowUnauthenticated
 	Requirement   isRequirement_Requirement `protobuf_oneof:"requirement"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -81,10 +81,10 @@ func (x *Requirement) GetPermission() string {
 	return ""
 }
 
-func (x *Requirement) GetPublic() bool {
+func (x *Requirement) GetAllowUnauthenticated() bool {
 	if x != nil {
-		if x, ok := x.Requirement.(*Requirement_Public); ok {
-			return x.Public
+		if x, ok := x.Requirement.(*Requirement_AllowUnauthenticated); ok {
+			return x.AllowUnauthenticated
 		}
 	}
 	return false
@@ -99,14 +99,14 @@ type Requirement_Permission struct {
 	Permission string `protobuf:"bytes,1,opt,name=permission,proto3,oneof"`
 }
 
-type Requirement_Public struct {
+type Requirement_AllowUnauthenticated struct {
 	// Allows every caller without credentials. Must be true when set.
-	Public bool `protobuf:"varint,2,opt,name=public,proto3,oneof"`
+	AllowUnauthenticated bool `protobuf:"varint,2,opt,name=allow_unauthenticated,json=allowUnauthenticated,proto3,oneof"`
 }
 
 func (*Requirement_Permission) isRequirement_Requirement() {}
 
-func (*Requirement_Public) isRequirement_Requirement() {}
+func (*Requirement_AllowUnauthenticated) isRequirement_Requirement() {}
 
 var file_apis_auth_v1_auth_proto_extTypes = []protoimpl.ExtensionInfo{
 	{
@@ -129,12 +129,12 @@ var File_apis_auth_v1_auth_proto protoreflect.FileDescriptor
 
 const file_apis_auth_v1_auth_proto_rawDesc = "" +
 	"\n" +
-	"\x17apis/auth/v1/auth.proto\x12\fapis.auth.v1\x1a google/protobuf/descriptor.proto\"X\n" +
+	"\x17apis/auth/v1/auth.proto\x12\fapis.auth.v1\x1a google/protobuf/descriptor.proto\"u\n" +
 	"\vRequirement\x12 \n" +
 	"\n" +
 	"permission\x18\x01 \x01(\tH\x00R\n" +
-	"permission\x12\x18\n" +
-	"\x06public\x18\x02 \x01(\bH\x00R\x06publicB\r\n" +
+	"permission\x125\n" +
+	"\x15allow_unauthenticated\x18\x02 \x01(\bH\x00R\x14allowUnauthenticatedB\r\n" +
 	"\vrequirement:]\n" +
 	"\vrequirement\x12\x1e.google.protobuf.MethodOptions\x18І\x03 \x01(\v2\x19.apis.auth.v1.RequirementR\vrequirementBT\n" +
 	"\x1bwork.lclpnet.ledger.auth.v1P\x01Z3github.com/lclpyt/ledger/gen/go/apis/auth/v1;authv1b\x06proto3"
@@ -173,7 +173,7 @@ func file_apis_auth_v1_auth_proto_init() {
 	}
 	file_apis_auth_v1_auth_proto_msgTypes[0].OneofWrappers = []any{
 		(*Requirement_Permission)(nil),
-		(*Requirement_Public)(nil),
+		(*Requirement_AllowUnauthenticated)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

@@ -51,15 +51,15 @@ func permission(p string) *authv1.Requirement {
 	return &authv1.Requirement{Requirement: &authv1.Requirement_Permission{Permission: p}}
 }
 
-func public(p bool) *authv1.Requirement {
-	return &authv1.Requirement{Requirement: &authv1.Requirement_Public{Public: p}}
+func allowUnauthenticated(p bool) *authv1.Requirement {
+	return &authv1.Requirement{Requirement: &authv1.Requirement_AllowUnauthenticated{AllowUnauthenticated: p}}
 }
 
 var _ = Describe("FilePermissions", func() {
 	It("maps every method to its declared requirement", func() {
 		permissions, err := auth.FilePermissions(serviceFile(map[string]*authv1.Requirement{
 			"Read":   permission("games.read"),
-			"Status": public(true),
+			"Status": allowUnauthenticated(true),
 		}))
 
 		Expect(err).ToNot(HaveOccurred())
@@ -84,7 +84,7 @@ var _ = Describe("FilePermissions", func() {
 		Entry("empty permission", permission(""), "invalid permission"),
 		Entry("malformed permission", permission("Games Read"), "invalid permission"),
 		Entry("wildcard permission", permission("games.*"), "invalid permission"),
-		Entry("public set to false", public(false), "public must be true"),
+		Entry("allow_unauthenticated set to false", allowUnauthenticated(false), "allow_unauthenticated must be true"),
 	)
 
 	It("reports every invalid method at once", func() {
